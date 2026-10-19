@@ -50,29 +50,37 @@ enum Shell {
             process.standardInput = FileHandle.nullDevice
 
             let collector = Collector(onLine: onLine)
-            out.fileHandleForReading.readabilityHandler = { h in
-                let d = h.availableData
-                if d.isEmpty { h.readabilityHandler = nil } else { collector.appendOut(d) }
+            // Each pipe is drained to end-of-file on its own thread, and the result is only reported once
+            // both are fully read *and* the process has exited, so no trailing output is ever lost.
+            let finished = DispatchGroup()
+            for (pipe, sink) in [(out, collector.appendOut), (err, collector.appendErr)] {
+                finished.enter()
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let handle = pipe.fileHandleForReading
+                    while case let data = handle.availableData, !data.isEmpty { sink(data) }
+                    finished.leave()
+                }
             }
-            err.fileHandleForReading.readabilityHandler = { h in
-                let d = h.availableData
-                if d.isEmpty { h.readabilityHandler = nil } else { collector.appendErr(d) }
-            }
-            process.terminationHandler = { p in
-                out.fileHandleForReading.readabilityHandler = nil
-                err.fileHandleForReading.readabilityHandler = nil
-                collector.appendOut(out.fileHandleForReading.readDataToEndOfFile())
-                collector.appendErr(err.fileHandleForReading.readDataToEndOfFile())
-                if p.terminationReason == .uncaughtSignal {
+            finished.enter()
+            process.terminationHandler = { _ in finished.leave() }
+            finished.notify(queue: .global()) {
+                if process.terminationReason == .uncaughtSignal {
                     cont.resume(throwing: CancellationError())
-                } else if p.terminationStatus == 0 {
+                } else if process.terminationStatus == 0 {
                     cont.resume(returning: collector.stdout)
                 } else {
                     let name = URL(fileURLWithPath: executable).lastPathComponent
                     cont.resume(throwing: fail("\(name) failed: \(collector.stderrTail)"))
                 }
             }
-            do { try process.run() } catch { cont.resume(throwing: error) }
+            do {
+                try process.run()
+            } catch {
+                // Nothing will close the pipes' write ends for us; do it so the reader threads finish.
+                try? out.fileHandleForWriting.close()
+                try? err.fileHandleForWriting.close()
+                cont.resume(throwing: error)
+            }
         }
     }
 
