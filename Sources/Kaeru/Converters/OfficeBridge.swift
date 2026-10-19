@@ -156,14 +156,20 @@ enum OfficeApps {
         }
     }
 
-    /// Office apps are sandboxed: saving to a new folder makes them ask for access, often in a
-    /// dialog hidden behind other windows, and their own containers are off limits to Kaeru. Their
-    /// sandbox does allow any file named like a lock file ("~$…"), so they save one of those into
-    /// Kaeru's temporary folder and Kaeru moves it into place.
+    /// Where Office apps save their exports before Kaeru moves them into place. Office asks for
+    /// access to any folder it hasn't been granted, so this folder never changes: the first export
+    /// asks once ("Grant File Access"), and Office remembers it after that. Their sandbox also
+    /// allows files named like lock files ("~$…"), which is why the exports are named that way.
+    static var exportFolder: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Kaeru/Office Exports", isDirectory: true)
+    }
+
     private static func viaLockName(_ output: URL, _ export: (URL) async throws -> Void) async throws {
-        let dir = try Output.tempDirectory()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let tmp = dir.appendingPathComponent("~$kaeru." + output.pathExtension)
+        let dir = exportFolder
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let tmp = dir.appendingPathComponent("~$kaeru-\(UUID().uuidString).\(output.pathExtension)")
+        defer { try? FileManager.default.removeItem(at: tmp) }
         try await export(tmp)
         if output.pathExtension.lowercased() == "pdf" { try requirePDF(tmp) }
         guard FileManager.default.fileExists(atPath: tmp.path) else { throw fail("The app didn't save the file") }
