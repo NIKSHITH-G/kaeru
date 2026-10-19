@@ -148,6 +148,9 @@ enum ImageOps {
         case "icns":
             try await writeICNS(image, to: url)
             return
+        case "avif" where !imageIOCanWriteAVIF:
+            try await writeAVIFWithFFmpeg(image, to: url, quality: quality ?? 0.85)
+            return
         default: break
         }
         guard let uti = utiForExt[ext] else { throw fail("Can't write .\(ext) images") }
@@ -168,6 +171,27 @@ enum ImageOps {
     }
 
     /// Neither ImageIO nor the stock Homebrew ffmpeg can encode WebP, so use cwebp from libwebp.
+    /// ImageIO's AVIF encoder depends on the Mac's hardware and is missing on some machines
+    /// (and on virtual Macs), so probe once and fall back to ffmpeg's SVT-AV1 encoder.
+    private static let imageIOCanWriteAVIF: Bool = {
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, "public.avif" as CFString, 1, nil),
+              let probe = draw(width: 16, height: 16, opaque: true, { _ in }) else { return false }
+        CGImageDestinationAddImage(dest, probe, nil)
+        return CGImageDestinationFinalize(dest)
+    }()
+
+    private static func writeAVIFWithFFmpeg(_ image: CGImage, to url: URL, quality: Double) async throws {
+        let ffmpeg = try Tools.ffmpeg()
+        let tmp = Output.temp(ext: "png")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try await write(image, to: tmp)
+        let crf = String(Int(63 - quality * 40))  // 0.9 → 27, 0.6 → 39
+        try await Shell.run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y", "-i", tmp.path,
+                                     "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libsvtav1", "-crf", crf,
+                                     "-pix_fmt", "yuv420p", "-frames:v", "1", url.path])
+    }
+
     private static func writeWebP(_ image: CGImage, to url: URL, quality: Double) async throws {
         let cwebp = try Tools.require("cwebp", hint: "WebP export needs libwebp: brew install webp")
         let tmp = Output.temp(ext: "png")

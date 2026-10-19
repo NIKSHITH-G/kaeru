@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/NIKSHITH-G/kaeru/releases/latest/download/Kaeru.dmg"><b>Download for macOS</b></a> ·
-  <a href="https://kaeru-app.vercel.app">Website</a> ·
+  <a href="https://getkaeru.vercel.app">Website</a> ·
   <a href="#build-from-source">Build from source</a>
 </p>
 

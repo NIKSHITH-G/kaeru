@@ -423,7 +423,7 @@ private struct AboutView: View {
             HStack(spacing: 16) {
                 Link("GitHub", destination: URL(string: "https://github.com/\(Updater.repository)")!)
                 Link("Report an issue", destination: URL(string: "https://github.com/\(Updater.repository)/issues/new")!)
-                Link("Website", destination: URL(string: "https://kaeru.vercel.app")!)
+                Link("Website", destination: URL(string: "https://getkaeru.vercel.app")!)
             }
             .font(.callout)
             Spacer()
