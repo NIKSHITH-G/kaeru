@@ -112,8 +112,8 @@ final class WheelView: NSView {
     /// The soft disc the tiles sit in: a pale, slightly translucent plate over the glass blur.
     private func drawBase(radius: CGFloat) {
         let disc = NSBezierPath(ovalIn: circle(radius))
-        let top = isDark ? NSColor(white: 0.17, alpha: 0.9) : NSColor(white: 0.955, alpha: 0.9)
-        let bottom = isDark ? NSColor(white: 0.12, alpha: 0.9) : NSColor(white: 0.9, alpha: 0.9)
+        let top = isDark ? NSColor(white: 0.16, alpha: 0.82) : NSColor(white: 0.97, alpha: 0.82)
+        let bottom = isDark ? NSColor(white: 0.1, alpha: 0.86) : NSColor(white: 0.91, alpha: 0.86)
         NSGradient(starting: top, ending: bottom)?.draw(in: disc, angle: -90)
         (isDark ? NSColor(white: 1, alpha: 0.08) : NSColor(white: 0, alpha: 0.07)).setStroke()
         disc.lineWidth = 1
@@ -153,47 +153,86 @@ final class WheelView: NSView {
         return NSBezierPath(path)
     }
 
+    /// The colour a tile lights up in: its format's category on the Convert wheel, the mode's colour otherwise.
+    private func tint(_ op: FileOperation) -> NSColor { Theme.color(for: op, mode: mode) }
+
+    /// A format's category symbol for Convert tiles.
+    private func symbol(for op: FileOperation) -> String {
+        guard mode == .convert else { return op.symbol }
+        switch Theme.category(forExt: op.targetExt ?? "") {
+        case .image: return "photo"
+        case .video: return "film"
+        case .audio: return "waveform"
+        case .pdf: return "doc.richtext"
+        case .document: return "doc.text"
+        case .spreadsheet: return "tablecells"
+        case .slides: return "rectangle.on.rectangle"
+        case .data: return "curlybraces"
+        default: return "archivebox"
+        }
+    }
+
     private func drawTile(_ i: Int, highlighted: Bool) {
         let g = geometry
         let item = items[i]
+        let color = tint(item)
         let path = tilePath(i, outer: highlighted ? g.outer + Self.pop : g.outer)
         let angle = startAngle(i) - step / 2
         let labelPoint = NSPoint(x: center.x + g.mid * cos(angle), y: center.y + g.mid * sin(angle))
 
+        // Resting tiles are quiet glass; the hovered one fills with its own colour and glows.
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow()
-        shadow.shadowColor = highlighted ? accent.withAlphaComponent(0.45) : NSColor.black.withAlphaComponent(isDark ? 0.35 : 0.07)
-        shadow.shadowBlurRadius = highlighted ? 16 : 3
-        shadow.shadowOffset = NSSize(width: 0, height: highlighted ? -4 : -1)
+        shadow.shadowColor = highlighted ? color.withAlphaComponent(0.55) : NSColor.black.withAlphaComponent(isDark ? 0.25 : 0.05)
+        shadow.shadowBlurRadius = highlighted ? 20 : 2
+        shadow.shadowOffset = NSSize(width: 0, height: highlighted ? -3 : -1)
         shadow.set()
-        (highlighted ? accent : (isDark ? NSColor(white: 0.2, alpha: 1) : .white)).setFill()
+        (highlighted ? color : (isDark ? NSColor(white: 1, alpha: 0.06) : NSColor(white: 1, alpha: 0.78))).setFill()
         path.fill()
         NSGraphicsContext.restoreGraphicsState()
 
-        // Pillow shading: a soft highlight in the middle of the tile fading to its edges.
         NSGraphicsContext.saveGraphicsState()
         path.addClip()
-        let light = highlighted ? accent.blended(withFraction: 0.25, of: .white)! : (isDark ? NSColor(white: 0.25, alpha: 1) : .white)
-        let edge = highlighted ? accent.blended(withFraction: 0.12, of: .black)! : (isDark ? NSColor(white: 0.17, alpha: 1) : NSColor(white: 0.93, alpha: 1))
-        NSGradient(starting: light, ending: edge)?.draw(fromCenter: labelPoint, radius: 0, toCenter: labelPoint, radius: 78, options: .drawsAfterEndingLocation)
+        if highlighted {
+            let top = color.blended(withFraction: 0.22, of: .white)!, bottom = color.blended(withFraction: 0.18, of: .black)!
+            NSGradient(starting: top, ending: bottom)?.draw(in: path, angle: -90)
+        } else {
+            // A faint sheen from the top, like light on glass.
+            let sheen = NSColor(white: 1, alpha: isDark ? 0.05 : 0.5)
+            NSGradient(starting: sheen, ending: NSColor(white: 1, alpha: 0))?.draw(in: path, angle: -90)
+        }
         NSGraphicsContext.restoreGraphicsState()
 
-        (highlighted ? NSColor(white: 1, alpha: 0.25) : (isDark ? NSColor(white: 1, alpha: 0.07) : NSColor(white: 0, alpha: 0.09))).setStroke()
+        (highlighted ? NSColor(white: 1, alpha: 0.3) : (isDark ? NSColor(white: 1, alpha: 0.09) : NSColor(white: 0, alpha: 0.07))).setStroke()
         path.lineWidth = 1
         path.stroke()
 
         let ink = highlighted ? NSColor.white : NSColor.labelColor
+        let soft = highlighted ? NSColor(white: 1, alpha: 0.8) : NSColor.secondaryLabelColor
         // Usable width: the chord across the tile at mid radius, minus the gaps and some padding.
         let width = min(2 * g.mid * sin(step / 2) - Self.gap - 14, 112)
         if mode == .convert {
-            drawFitted(item.title.uppercased(), centeredAt: labelPoint, maxWidth: width, size: 16, minSize: 11, weight: .bold,
-                       color: ink, kern: 0.4)
+            // Icon in the format's colour, the format name, and a few words on what it's good for.
+            let caption = hint(for: item)
+            let symbolHeight: CGFloat = 18, spacing: CGFloat = 4
+            let nameSize: CGFloat = 15, captionSize: CGFloat = 9.5
+            let block = symbolHeight + spacing + nameSize * 1.2 + (caption == nil ? 0 : captionSize * 1.3 + 1)
+            let top = labelPoint.y + block / 2
+            drawSymbol(symbol(for: item), at: NSPoint(x: labelPoint.x, y: top - symbolHeight / 2),
+                       color: highlighted ? .white : color, size: 15)
+            let nameY = top - symbolHeight - spacing - nameSize * 0.6
+            drawFitted(item.title.uppercased(), centeredAt: NSPoint(x: labelPoint.x, y: nameY), maxWidth: width,
+                       size: nameSize, minSize: 10.5, weight: .semibold, color: ink, kern: 0.6)
+            if let caption {
+                drawText(caption, at: NSPoint(x: labelPoint.x, y: nameY - nameSize * 0.6 - captionSize * 1.35 - 1), size: captionSize,
+                         weight: .medium, color: soft, width: width + 6)
+            }
         } else {
             let text = layoutFitted(item.title, maxWidth: width, size: 12, minSize: 9.5, weight: .semibold)
             let symbolHeight: CGFloat = 20, spacing: CGFloat = 5
             let blockTop = labelPoint.y + (symbolHeight + spacing + text.height) / 2
-            drawSymbol(item.symbol, at: NSPoint(x: labelPoint.x, y: blockTop - symbolHeight / 2),
-                       color: highlighted ? .white : .secondaryLabelColor)
+            drawSymbol(symbol(for: item), at: NSPoint(x: labelPoint.x, y: blockTop - symbolHeight / 2),
+                       color: highlighted ? .white : color, size: 17)
             drawFitted(item.title, centeredAt: NSPoint(x: labelPoint.x, y: blockTop - symbolHeight - spacing - text.height / 2),
                        maxWidth: width, size: 12, minSize: 9.5, weight: .semibold, color: ink)
         }
@@ -232,8 +271,8 @@ final class WheelView: NSView {
         }
     }
 
-    private func drawSymbol(_ name: String, at p: NSPoint, color: NSColor) {
-        let config = NSImage.SymbolConfiguration(pointSize: 17, weight: .medium).applying(.init(paletteColors: [color]))
+    private func drawSymbol(_ name: String, at p: NSPoint, color: NSColor, size: CGFloat = 17) {
+        let config = NSImage.SymbolConfiguration(pointSize: size, weight: .medium).applying(.init(paletteColors: [color]))
         guard let symbol = (NSImage(systemSymbolName: name, accessibilityDescription: nil)
             ?? NSImage(systemSymbolName: "circle", accessibilityDescription: nil))?.withSymbolConfiguration(config) else { return }
         let s = symbol.size
@@ -250,48 +289,73 @@ final class WheelView: NSView {
         ])
     }
 
-    /// The hole in the middle holds a floating pill naming the current choice, and the mode keys.
+    /// The hole in the middle: a pill naming the current choice (or the file, at rest), and the
+    /// three wheels as small icons, the current one lit.
     private func drawCenter(radius r: CGFloat) {
         let hoveredItem = hovered.flatMap { items.indices.contains($0) ? items[$0] : nil }
         let label: String
-        let ink: NSColor
-        if hovered == -1 { label = "Cancel"; ink = .systemRed }
-        else if let op = hoveredItem { label = mode == .convert ? op.title.uppercased() : op.title; ink = .labelColor }
-        else { label = items.isEmpty ? "Nothing here" : mode.title; ink = .secondaryLabelColor }
+        var ink = NSColor.labelColor
+        var leading: (symbol: String, color: NSColor)?
+        var showThumb = false
+        if hovered == -1 {
+            label = "Cancel"; ink = .secondaryLabelColor; leading = ("xmark", .systemRed)
+        } else if let op = hoveredItem {
+            label = mode == .convert ? "to " + op.title.uppercased() : op.title
+            leading = (symbol(for: op), tint(op))
+        } else {
+            label = items.isEmpty ? "Nothing here" : mode.title
+            ink = .secondaryLabelColor
+            showThumb = thumbnail != nil && !items.isEmpty
+        }
 
-        let font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        let font = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        let iconWidth: CGFloat = (leading != nil || showThumb) ? 22 : 0
         let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
-        let pillWidth = min(max(textWidth + 36, 92), r * 2 - 8)
-        let pill = NSRect(x: center.x - pillWidth / 2, y: center.y - 13, width: pillWidth, height: 40)
-        let path = NSBezierPath(roundedRect: pill, xRadius: 20, yRadius: 20)
+        let pillWidth = min(max(textWidth + iconWidth + 32, 96), r * 2 - 12)
+        let pill = NSRect(x: center.x - pillWidth / 2, y: center.y - 8, width: pillWidth, height: 34)
+        let path = NSBezierPath(roundedRect: pill, xRadius: 17, yRadius: 17)
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(isDark ? 0.45 : 0.1)
-        shadow.shadowBlurRadius = 12
-        shadow.shadowOffset = NSSize(width: 0, height: -3)
+        shadow.shadowColor = NSColor.black.withAlphaComponent(isDark ? 0.4 : 0.1)
+        shadow.shadowBlurRadius = 10
+        shadow.shadowOffset = NSSize(width: 0, height: -2)
         shadow.set()
-        (isDark ? NSColor(white: 0.22, alpha: 1) : .white).setFill()
+        (isDark ? NSColor(white: 0.2, alpha: 1) : .white).setFill()
         path.fill()
         NSGraphicsContext.restoreGraphicsState()
-        let fit = layoutFitted(label, maxWidth: pillWidth - 22, size: 15, minSize: 10.5, weight: .semibold)
-        let one = fit.lines.count == 1 ? fit.lines[0] : label
-        drawText(one, at: NSPoint(x: center.x, y: pill.midY - fit.size * 0.62), size: fit.lines.count == 1 ? fit.size : 10.5,
-                 weight: .semibold, color: ink, width: pillWidth - 14)
+        (isDark ? NSColor(white: 1, alpha: 0.08) : NSColor(white: 0, alpha: 0.06)).setStroke()
+        path.lineWidth = 1
+        path.stroke()
 
-        // Mode keys, small and quiet, under the pill.
+        let fit = layoutFitted(label, maxWidth: pillWidth - 26 - iconWidth, size: 14, minSize: 10, weight: .semibold)
+        let one = fit.lines.count == 1 ? fit.lines[0] : label
+        let size = fit.lines.count == 1 ? fit.size : 10
+        let drawnWidth = (one as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: size, weight: .semibold)]).width
+        let contentWidth = min(drawnWidth, pillWidth - 26 - iconWidth) + iconWidth
+        let startX = center.x - contentWidth / 2
+        if let leading {
+            drawSymbol(leading.symbol, at: NSPoint(x: startX + 8, y: pill.midY), color: leading.color, size: 13)
+        } else if showThumb, let thumbnail {
+            thumbnail.draw(in: NSRect(x: startX, y: pill.midY - 9, width: 18, height: 18), from: .zero, operation: .sourceOver, fraction: 1)
+        }
+        drawText(one, at: NSPoint(x: startX + iconWidth + drawnWidth / 2, y: pill.midY - size * 0.62), size: size,
+                 weight: .semibold, color: ink, width: drawnWidth + 8)
+
+        // The three wheels as icons under the pill; the key that opens each is shown when interactive.
         let modes = WheelMode.allCases
-        let w: CGFloat = 19, spacing: CGFloat = 5
+        let w: CGFloat = 28, h: CGFloat = 22, spacing: CGFloat = 4
         let total = CGFloat(modes.count) * w + CGFloat(modes.count - 1) * spacing
         for (i, m) in modes.enumerated() {
-            let rect = NSRect(x: center.x - total / 2 + CGFloat(i) * (w + spacing), y: pill.minY - 26, width: w, height: 16)
+            let rect = NSRect(x: center.x - total / 2 + CGFloat(i) * (w + spacing), y: pill.minY - 30, width: w, height: h)
+            let modeColor = [Theme.brand, Theme.Category.tool.color, Theme.Category.action.color][m.rawValue]
             if m == mode {
-                accent.withAlphaComponent(0.16).setFill()
-                NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+                modeColor.withAlphaComponent(isDark ? 0.22 : 0.15).setFill()
+                NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7).fill()
             }
-            let glyph = interactive ? "\(i + 1)" : Settings.modifier(for: m).glyph
-            drawText(glyph, at: NSPoint(x: rect.midX, y: rect.minY + 1), size: 10, weight: .bold,
-                     color: m == mode ? accent : .tertiaryLabelColor, width: w)
+            drawSymbol(m.symbol, at: NSPoint(x: rect.midX, y: rect.midY), color: m == mode ? modeColor : .tertiaryLabelColor, size: 12)
         }
+        let hint = interactive ? "1 · 2 · 3 to switch" : modes.map { Settings.modifier(for: $0).glyph }.joined(separator: "  ")
+        drawText(hint, at: NSPoint(x: center.x, y: pill.minY - 48), size: 9, weight: .medium, color: .tertiaryLabelColor, width: r * 2 - 20)
     }
 
     /// "Convert photo.heic to PNG" in a small capsule under the disc, with the file's thumbnail.
@@ -302,7 +366,7 @@ final class WheelView: NSView {
         if hovered == -1 { text = "Drop here to cancel" }
         else if let op = hoveredItem {
             switch mode {
-            case .convert: text = "Convert \(name) to \(op.title.uppercased())" + (hint(for: op).map { " · \($0)" } ?? "")
+            case .convert: text = "Convert \(name) to \(op.title.uppercased())"
             case .tools, .actions: text = "\(op.title) · \(name)"
             }
         } else { text = name }
@@ -330,10 +394,15 @@ final class WheelView: NSView {
 
     private func hint(for op: FileOperation) -> String? {
         guard let ext = op.targetExt else { return nil }
-        let hints = ["jpg": "works everywhere", "png": "lossless", "heic": "small, Apple devices", "webp": "small, for the web",
-                     "avif": "smallest", "pdf": "document", "mp4": "plays everywhere", "mov": "Apple devices", "gif": "animated",
-                     "mp3": "plays everywhere", "wav": "lossless", "flac": "lossless", "docx": "Word", "md": "plain text",
-                     "xlsx": "Excel", "pptx": "PowerPoint", "epub": "e-book", "zip": "archive", "ico": "Windows icon", "icns": "macOS icon"]
+        let hints = ["jpg": "universal", "png": "lossless", "heic": "small, Apple", "webp": "small, web",
+                     "avif": "smallest", "pdf": "document", "mp4": "universal", "mov": "Apple devices", "gif": "animated",
+                     "mp3": "universal", "wav": "lossless", "flac": "lossless", "docx": "Word", "md": "plain text",
+                     "xlsx": "Excel", "pptx": "PowerPoint", "epub": "e-book", "zip": "archive", "ico": "Windows icon", "icns": "macOS icon",
+                     "txt": "just text", "html": "web page", "rtf": "rich text", "odt": "LibreOffice", "ods": "LibreOffice",
+                     "bmp": "uncompressed", "tiff": "print quality", "csv": "any app", "tsv": "tab separated", "json": "data",
+                     "m4a": "Apple audio", "aac": "small audio", "ogg": "open audio", "opus": "small, speech", "aiff": "lossless",
+                     "webm": "web video", "mkv": "any player", "avi": "older players", "pages": "Pages", "plist": "Apple data",
+                     "srt": "subtitles", "vtt": "web subtitles"]
         return hints[ext]
     }
 
