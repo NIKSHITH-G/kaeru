@@ -167,12 +167,25 @@ def drop_success():
 
 def sfx():
     track = np.zeros(N)
-    # 1. Logo
-    place(track, bloop(), 0.18, 0.7)
-    place(track, whoosh(0.4), 0.55, 0.16)
-    # 2. Headline lines
-    place(track, whoosh(0.35), 2.6, 0.18)
-    place(track, whoosh(0.35), 2.95, 0.18)
+    # 1. Hook: a rising tick for every format flip (0.19s apart), air as "Any format." lands
+    for k in range(9):
+        n = int(SR * 0.035)
+        tick = np.sin(2 * np.pi * (700 + k * 95) * t_axis(0.035)) * env(n, 0.0005, 0.008)
+        c = click()
+        place(track, tick + np.pad(c, (0, max(0, n - len(c))))[:n] * 0.3, k * 0.19, 0.42)
+    place(track, whoosh(0.35), 0.75, 0.14)
+    # Card morphs into the frog: whoosh, pop, and a soft shimmer for the ripple rings
+    place(track, whoosh(0.45), 1.62, 0.2)
+    place(track, bloop(300, 900, 0.18), 1.85, 0.7)
+    for m in (84, 88, 91):
+        place(track, bell(m, 1.4), 1.9, 0.12)
+    # 2. "Kaeru" lands letter by letter: a rising pentatonic pluck per letter, a bell for かえる
+    for i, m in enumerate((72, 74, 76, 79, 81)):
+        place(track, pluck(m, 0.6), 2.25 + i * 0.06, 0.32)
+    place(track, bell(88, 1.2), 2.47, 0.22)
+    # 3. Headline lines
+    place(track, whoosh(0.35), 3.33, 0.18)
+    place(track, whoosh(0.35), 3.56, 0.18)
     # 3–5. Desktop window, then three drag → key → wheel → hover → drop beats (times match Promo.tsx BEATS)
     place(track, whoosh(0.5), 4.75, 0.18)
     for grab, wheel_in, hover_at, drop in [(6.05, 6.9, 7.85, 8.6), (10.95, 11.7, 12.55, 13.1), (14.75, 15.35, 15.95, 16.4)]:

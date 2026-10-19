@@ -126,7 +126,7 @@ final class WheelController {
     func hide() {
         guard let panel, panel.isVisible else { return }
         panel.orderOut(nil)
-        if interactive && !NSApp.windows.contains(where: { $0.isVisible && ($0 is MainWindow || $0 is OnboardingWindow) }) {
+        if interactive && !NSApp.windows.contains(where: { $0.isVisible && ($0 is MainWindow || $0 is OnboardingWindow || $0 is ShelfPanel) }) {
             NSApp.hide(nil)  // hand focus back to Finder
         }
     }

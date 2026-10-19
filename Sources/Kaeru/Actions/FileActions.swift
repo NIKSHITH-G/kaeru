@@ -11,8 +11,8 @@ enum FileActions {
             service.perform(withItems: urls)
             return nil
         },
-        instant("action.float", "Float", "pin") { urls in
-            FloatPanel.show(urls)
+        instant("action.float", "Shelf", "tray.full") { urls in
+            ShelfManager.open(with: urls)
             return nil
         },
         instant("action.copy", "Copy", "doc.on.doc") { urls in

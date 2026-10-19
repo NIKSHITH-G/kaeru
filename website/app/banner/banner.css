@@ -1,0 +1,33 @@
+.banner {
+  position: fixed; inset: 0; width: 1280px; height: 640px; z-index: 100; overflow: hidden;
+  display: grid; grid-template-columns: 1fr 460px; align-items: center; padding: 0 70px 0 80px; gap: 30px;
+  background:
+    radial-gradient(700px 420px at 12% 0%, #c6f1db 0%, transparent 60%),
+    radial-gradient(700px 420px at 100% 100%, #cbe9f8 0%, transparent 60%),
+    #f6fbf8;
+  color: #0d1f17; font-family: var(--font-sans), -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  .banner {
+    background:
+      radial-gradient(700px 420px at 12% 0%, #12442f 0%, transparent 60%),
+      radial-gradient(700px 420px at 100% 100%, #0f3247 0%, transparent 60%),
+      #0b100d;
+    color: #eaf3ee;
+  }
+}
+.banner * { animation: none !important; }
+.banner-brand { display: flex; align-items: center; gap: 18px; }
+.banner-brand img { border-radius: 20px; filter: drop-shadow(0 14px 26px #22c57855); }
+.banner-brand h1 { font-size: 64px; line-height: 1; letter-spacing: -0.04em; margin: 0; }
+.banner-brand .maru { font-size: 20px; color: #3f9a6f; }
+.banner-pitch { font-size: 52px; font-weight: 800; line-height: 1.06; letter-spacing: -0.035em; margin: 34px 0 18px; }
+.banner-how { font-size: 21px; color: var(--muted); margin: 0 0 22px; }
+.banner-how kbd { font-size: 18px; }
+.banner-chips { display: flex; gap: 10px; }
+.banner-chips span {
+  font-size: 15px; font-weight: 600; padding: 7px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--line);
+}
+.banner-wheel { display: flex; justify-content: center; }
+.banner-wheel .mini-wheel { --mini: 1.1 !important; width: 372px !important; height: 372px !important; margin: 0; }
+.banner-wheel svg { filter: drop-shadow(0 24px 50px #0d1f1733); }

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { CornerDownLeft, Download, Gauge, Keyboard, MousePointerClick, RefreshCw, Scissors, Sparkles } from "lucide-react";
 import { CopyCommand, PlatformNote } from "./components/Bits";
+import { DriftingChips, FormatFlipper, VideoButton } from "./components/Hero";
 import WheelDemo, { MiniWheel } from "./components/WheelDemo";
 import { COLORS, DOWNLOAD_URL, FORMAT_GROUPS, GITHUB_URL, RELEASES_URL, latestRelease, recentReleases } from "./site";
 
@@ -87,24 +88,32 @@ export default async function Home() {
 
       <main>
         <section className="hero">
-          <p className="eyebrow"><span className="maru">かえる</span> · “to change” — and “frog”</p>
-          <h1>Change any file.<br /><span className="grad">Without opening anything.</span></h1>
+          <DriftingChips />
+          {releases[0] && (
+            <a href={releases[0].url} className="news-pill">
+              <span className="news-tag">New</span><span>v{releases[0].version} · {releases[0].title}</span><span aria-hidden>→</span>
+            </a>
+          )}
+          <h1>
+            <span className="sr-only">Kaeru: change any file without opening anything.</span>
+            <FormatFlipper />
+            <br /><span className="grad">Without opening anything.</span>
+          </h1>
           <p className="lede">
-            Drag a file, hold <kbd>⇧</kbd>, drop it on what you want. Kaeru turns every drag into a converter, editor
-            and share menu — and never uploads a byte.
+            Drag a file, hold <kbd>⇧</kbd>, drop it on what you want. <span className="maru">かえる</span> (kaeru)
+            means “to change” — and it turns every drag into a converter, editor and share menu, without uploading a byte.
           </p>
           <div className="cta">
-            <a href={DOWNLOAD_URL} className="btn">
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path fill="currentColor" d="M8 1v9.6l3.3-3.3 1.4 1.4L8 13.4 3.3 8.7l1.4-1.4L7 10.6V1h2zM2 14h12v2H2z" /></svg>
-              Download for macOS
+            <a href={DOWNLOAD_URL} className="btn btn-big">
+              <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden><path fill="currentColor" d="M8 1v9.6l3.3-3.3 1.4 1.4L8 13.4 3.3 8.7l1.4-1.4L7 10.6V1h2zM2 14h12v2H2z" /></svg>
+              <span>Download for macOS<small>{release.version ? `v${release.version}` : "Free"}{release.sizeMB ? ` · ${release.sizeMB} MB` : ""} · Apple silicon</small></span>
             </a>
-            <a href={GITHUB_URL} className="btn btn-ghost"><GitHubMark /> View source</a>
+            <VideoButton />
+            <a href={GITHUB_URL} className="btn btn-ghost btn-icon" aria-label="View source on GitHub"><GitHubMark size={18} /></a>
           </div>
-          <p className="meta">
-            Free · Open source · macOS 13+ · Apple silicon
-            {release.version && <> · v{release.version}</>}
-            {release.sizeMB && <> · {release.sizeMB} MB</>}
-          </p>
+          <div className="trust">
+            <span>Free &amp; open source</span><span>{totalConversions} conversions</span><span>Nothing uploaded</span><span>macOS 13+</span>
+          </div>
           <PlatformNote />
           <WheelDemo />
         </section>

@@ -6,7 +6,7 @@ if let command = arguments.first, command.hasPrefix("--") {
     // Headless mode for scripting and tests:
     //   Kaeru --list <files…>          print available operation ids
     //   Kaeru --run <op-id> <files…>   run one operation and print the outputs
-    let files = arguments.dropFirst(command == "--run" ? 2 : 1).map { URL(fileURLWithPath: $0) }
+    let files = arguments.dropFirst(command == "--run" || command == "--shelf-test" ? 2 : 1).map { URL(fileURLWithPath: $0) }
     // Headless runs must never prompt to control PowerPoint/Keynote unless asked to.
     if command == "--self-test" { setenv("KAERU_NO_APPS", "1", 1) }
     Task { @MainActor in
@@ -43,6 +43,19 @@ if let command = arguments.first, command.hasPrefix("--") {
                 try? final.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "wheel.png"))
             }
             exit(0)
+        case "--shelf-test" where arguments.count >= 3:
+            // Kaeru --shelf-test <op-id> <file> — puts the file on a real shelf, runs the operation through the
+            // JobCenter, and checks the result comes back onto that shelf (in its staging folder).
+            ShelfManager.open(with: files)
+            guard let shelf = ShelfManager.shelf(containing: files), let op = Registry.find(arguments[1], for: files) else { exit(2) }
+            JobCenter.shared.run(op, on: files)
+            while JobCenter.shared.jobs.first?.isRunning == true { try? await Task.sleep(nanoseconds: 100_000_000) }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            for item in shelf.items { print("\(item.staged ? "made" : "in  ")  \(item.url.path)") }
+            let ok = shelf.items.contains { $0.staged && $0.url.path.hasPrefix(shelf.stagingDirectory.path) }
+            print(ok ? "result is on the shelf" : "result missing from shelf")
+            shelf.discardStaging()
+            exit(ok ? 0 : 1)
         case "--self-test":
             exit(SelfTest.run())
         case "--make-icon" where arguments.count >= 2:
@@ -66,6 +79,8 @@ if let command = arguments.first, command.hasPrefix("--") {
                 if let image = try? ImageOps.load(URL(fileURLWithPath: arguments[2])).0 {
                     Task { _ = await CropWindow.ask(image: image, title: "photo.png") }
                 }
+            case "shelf":
+                ShelfManager.open(with: Array(files.dropFirst()))
             case let t where t.hasPrefix("onboarding"):
                 OnboardingWindow.show()
                 OnboardingModel.shared.step = Int(t.dropFirst(10)) ?? 0
@@ -73,7 +88,8 @@ if let command = arguments.first, command.hasPrefix("--") {
                 MainWindow.show(page: AppModel.Page(rawValue: target.capitalized) ?? .home)
             }
             try? await Task.sleep(nanoseconds: 1_200_000_000)
-            if let view = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) })?.contentView?.superview,
+            let window = target == "shelf" ? NSApp.windows.first(where: { $0 is ShelfPanel }) : NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) })
+            if let view = (target == "shelf" ? window?.contentView : window?.contentView?.superview),
                let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
                 view.cacheDisplay(in: view.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "render.png"))
@@ -98,7 +114,7 @@ if let command = arguments.first, command.hasPrefix("--") {
             exit(2)
         }
     }
-    NSApplication.shared.setActivationPolicy(command == "--render" ? .accessory : .prohibited)
+    NSApplication.shared.setActivationPolicy(command == "--render" || command == "--shelf-test" ? .accessory : .prohibited)
     NSApplication.shared.run()
 } else {
     let delegate = MainActor.assumeIsolated { AppDelegate() }

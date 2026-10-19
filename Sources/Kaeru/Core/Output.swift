@@ -4,7 +4,11 @@ import Foundation
 enum Output {
     static var fm: FileManager { .default }
 
+    /// Set while a job started from a shelf runs, so its results land in the shelf's staging folder.
+    @TaskLocal static var overrideDirectory: URL?
+
     static func directory(for input: URL) -> URL {
+        if let overrideDirectory { return overrideDirectory }
         switch Settings.outputLocation {
         case .downloads: return fm.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
         case .desktop: return fm.urls(for: .desktopDirectory, in: .userDomainMask)[0]

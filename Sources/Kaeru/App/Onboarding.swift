@@ -11,13 +11,14 @@ final class OnboardingWindow: NSWindow {
         let window = shared ?? OnboardingWindow()
         shared = window
         OnboardingModel.shared.step = 0
+        OnboardingModel.shared.welcomeStart = Date()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
 
     @MainActor
     private init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 560, height: 500), styleMask: [.titled, .closable, .fullSizeContentView],
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 680, height: 500), styleMask: [.titled, .closable, .fullSizeContentView],
                    backing: .buffered, defer: false)
         titlebarAppearsTransparent = true
         titleVisibility = .hidden
@@ -33,6 +34,8 @@ final class OnboardingModel: ObservableObject {
     static let shared = OnboardingModel()
 
     @Published var step = 0
+    /// When the welcome screen appeared; drives its staged entrance and animations.
+    var welcomeStart = Date()
     @Published var triedIt = false
     @Published var result: URL?
     let sample: URL
@@ -85,24 +88,46 @@ private struct OnboardingView: View {
                                     removal: .move(edge: .leading).combined(with: .opacity)))
             footer
         }
-        .frame(width: 560, height: 500)
+        .frame(width: 680, height: 500)
+        .overlay(alignment: .topTrailing) {
+            if model.step < 3 {
+                Button("Skip tutorial") { NSApp.keyWindow?.close() }
+                    .buttonStyle(.link).font(.system(size: 12)).padding(.top, 14).padding(.trailing, 18)
+            }
+        }
         .background(LinearGradient(colors: [Theme.brand.swiftUI.opacity(0.10), .clear], startPoint: .top, endPoint: .center))
     }
 
     private var welcome: some View {
-        VStack(spacing: 16) {
-            Image(nsImage: Artwork.appMark(size: 110)).shadow(color: Theme.brand.swiftUI.opacity(0.4), radius: 18, y: 8)
-            Text("Welcome to Kaeru").font(.system(size: 30, weight: .bold, design: .rounded))
-            Text("かえる means “to change” — and “frog”.\nKaeru changes files without you opening a single app.")
-                .multilineTextAlignment(.center).foregroundStyle(.secondary)
-            HStack(spacing: 18) {
-                pill("lock.shield", "Private")
-                pill("bolt", "Instant")
-                pill("square.grid.3x3", "300+ conversions")
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSince(model.welcomeStart)
+            HStack(spacing: 28) {
+                VStack(alignment: .leading, spacing: 13) {
+                    Image(nsImage: Artwork.appMark(size: 72))
+                        .shadow(color: Theme.brand.swiftUI.opacity(0.45), radius: 16, y: 8)
+                        .offset(y: sin(t * 2.2) * 3)
+                        .appear(t, 0.05)
+                    Text("Welcome to Kaeru").font(.system(size: 32, weight: .bold, design: .rounded)).appear(t, 0.15)
+                    Text("かえる means “to change” — and “frog”.").foregroundStyle(.secondary).appear(t, 0.25)
+                    FormatFlip(t: t - 0.4).padding(.vertical, 6).appear(t, 0.4)
+                    Text("Drag any file, hold a key, and drop it on what you want. No apps to open, nothing uploaded.")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).appear(t, 0.5)
+                    HStack(spacing: 8) {
+                        pill("lock.shield", "Private")
+                        pill("bolt", "Instant")
+                        pill("square.grid.3x3", "350+ conversions")
+                    }
+                    .padding(.top, 4)
+                    .appear(t, 0.6)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                WheelPreview(hover: Int(max(0, t - 0.8) / 0.75))
+                    .aspectRatio(WheelPreview.aspect, contentMode: .fit)
+                    .frame(width: 250)
+                    .appear(t, 0.3)
             }
-            .padding(.top, 6)
+            .padding(.horizontal, 36)
         }
-        .padding(30)
     }
 
     private func pill(_ symbol: String, _ text: String) -> some View {
@@ -198,7 +223,7 @@ private struct OnboardingView: View {
                     advance(model.step == 1 && !model.triedIt ? 1 : -1)
                 }
             }
-            Button(model.step == 3 ? "Start Using Kaeru" : "Continue") {
+            Button(model.step == 3 ? "Start Using Kaeru" : model.step == 0 ? "Get Started" : "Continue") {
                 if model.step == 3 { NSApp.keyWindow?.close() } else { advance(1) }
             }
             .keyboardShortcut(.defaultAction)

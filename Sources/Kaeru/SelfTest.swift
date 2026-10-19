@@ -25,6 +25,7 @@ enum SelfTest {
         versions()
         kinds()
         registry()
+        shelf()
         print(failures == 0 ? "✓ \(count) checks passed" : "\(failures) of \(count) checks failed")
         return failures == 0 ? 0 : 1
     }
@@ -92,6 +93,26 @@ enum SelfTest {
             expect(FileKind.of(URL(fileURLWithPath: "/nonexistent/\(name)")) == kind, "\(name) is \(kind)")
         }
         expect(FileKind.normalizedExt("JPEG") == "jpg" && FileKind.normalizedExt("tif") == "tiff", "Extension aliases")
+    }
+
+    @MainActor
+    private static func shelf() {
+        let model = ShelfModel()
+        let a = URL(fileURLWithPath: "/tmp/a.png"), b = URL(fileURLWithPath: "/tmp/b.png")
+        model.add([a, b, a])
+        expect(model.items.count == 2, "Shelf ignores duplicates")
+        let made = model.stagingDirectory.appendingPathComponent("a.jpg")
+        expect(model.contains(made) && model.contains(a), "Shelf owns its staging folder and the files on it")
+        model.add([made])
+        expect(model.items.last?.staged == true && model.items.first?.staged == false, "Results are marked as made on the shelf")
+        model.click(model.items[0], extend: false)
+        model.click(model.items[1], extend: true)
+        expect(model.dragItems(startingAt: model.items[0]).count == 2, "Dragging a selected item carries the selection")
+        expect(model.dragItems(startingAt: model.items[2]).count == 1, "Dragging an unselected item carries just it")
+        let routed = Output.$overrideDirectory.withValue(model.stagingDirectory) { Output.directory(for: a) }
+        expect(routed == model.stagingDirectory, "Jobs from a shelf write into its staging folder")
+        expect(Output.directory(for: a) != model.stagingDirectory, "Other jobs are unaffected")
+        model.discardStaging()
     }
 
     @MainActor

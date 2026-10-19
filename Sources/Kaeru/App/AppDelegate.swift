@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         add(menu, "Open Kaeru", #selector(openMain))
         add(menu, "Convert Finder Selection", #selector(convertFinderSelection), key: "m", modifiers: [.control, .option])
+        add(menu, "New Shelf", #selector(newShelf), key: "s", modifiers: [.control, .option])
         let recent = menu.addItem(withTitle: "Recent", action: nil, keyEquivalent: "")
         recent.submenu = recentMenu
         menu.addItem(.separator())
@@ -89,6 +90,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func revealRecent(_ sender: NSMenuItem) {
         if let urls = sender.representedObject as? [URL] { NSWorkspace.shared.activateFileViewerSelecting(urls) }
     }
+
+    @objc private func newShelf() { ShelfManager.open(with: []) }
 
     @objc private func openFormats() { MainWindow.show(page: .formats) }
     @objc private func openSettings() { MainWindow.show(page: .settings) }

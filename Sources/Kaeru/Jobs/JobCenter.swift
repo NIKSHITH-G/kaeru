@@ -109,11 +109,16 @@ final class JobCenter: ObservableObject {
         if jobs.count > 100 { jobs.removeLast(jobs.count - 100) }
         HUD.shared.show()
 
+        // Files on a shelf get their results back on that shelf, written to its staging folder.
+        let shelf = ShelfManager.shelf(containing: urls)
+        let destination = shelf?.stagingDirectory
         job.task = Task.detached(priority: .userInitiated) {
             let state: Job.State
             do {
-                let result = try await op.run(urls) { p in
-                    Task { @MainActor in if job.isRunning { job.state = .running(p) } }
+                let result = try await Output.$overrideDirectory.withValue(destination) {
+                    try await op.run(urls) { p in
+                        Task { @MainActor in if job.isRunning { job.state = .running(p) } }
+                    }
                 }
                 state = .done(result)
             } catch is CancellationError {
@@ -130,6 +135,7 @@ final class JobCenter: ObservableObject {
                 } else if let first = job.existingOutputs.first {
                     job.loadThumbnail(of: first)
                 }
+                if let shelf { shelf.add(job.existingOutputs, staged: true) }
                 self.save()
                 self.finished.send(job)
                 HUD.shared.scheduleHide()

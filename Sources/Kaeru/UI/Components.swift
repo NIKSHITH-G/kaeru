@@ -132,3 +132,94 @@ struct FlowLayout: Layout {
         }
     }
 }
+
+/// A real Kaeru wheel, scaled down and non-interactive, with its highlight stepping around. Used on the welcome screen.
+struct WheelPreview: NSViewRepresentable {
+    let hover: Int
+
+    func makeNSView(context: Context) -> ScaledWheelHost { ScaledWheelHost() }
+    func updateNSView(_ view: ScaledWheelHost, context: Context) { view.setHover(hover) }
+
+    /// Width-to-height ratio of the preview, so SwiftUI can size it without distortion.
+    static var aspect: CGFloat { let s = ScaledWheelHost.fullSize; return s.width / s.height }
+}
+
+final class ScaledWheelHost: NSView {
+    static let sample = [URL(fileURLWithPath: "/tmp/Vacation.heic")]
+    static var items: [FileOperation] { Registry.operations(for: sample, mode: .convert) }
+    static var fullSize: NSSize { WheelView.size(forItems: items.count) }
+
+    private let wheel: WheelView
+    private let count: Int
+    private var current = -2
+
+    init() {
+        let items = Self.items
+        count = items.count
+        wheel = WheelView(frame: NSRect(origin: .zero, size: Self.fullSize))
+        super.init(frame: .zero)
+        wheel.configure(urls: Self.sample, mode: .convert, items: items, interactive: false)
+        wheel.unregisterDraggedTypes()
+        addSubview(wheel)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    // Drawing at full size into a smaller frame (bounds ≠ frame) keeps the scaled wheel crisp.
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        bounds = NSRect(origin: .zero, size: Self.fullSize)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func setHover(_ index: Int) {
+        let i = index % max(count, 1)
+        guard i != current else { return }
+        current = i
+        wheel.debugHover(i)
+    }
+}
+
+/// "Turn HEIC into JPG" — the pair flips every 1.8 seconds. `t` is seconds since the screen appeared.
+struct FormatFlip: View {
+    let t: Double
+    private static let pairs: [(String, String, String, String)] = [
+        ("HEIC", "jpg", "JPG", "jpg"), ("MOV", "mov", "MP4", "mp4"), ("DOCX", "docx", "PDF", "pdf"),
+        ("PDF", "pdf", "PPTX", "pptx"), ("WAV", "wav", "MP3", "mp3"), ("CSV", "csv", "XLSX", "xlsx"),
+    ]
+
+    var body: some View {
+        let slot = Int(max(0, t) / 1.8)
+        let local = max(0, t) - Double(slot) * 1.8
+        let pair = Self.pairs[slot % Self.pairs.count]
+        HStack(spacing: 8) {
+            Text("Turn")
+            badge(pair.0, ext: pair.1, flip: local)
+            Text("into")
+            badge(pair.2, ext: pair.3, flip: local - 0.1)
+        }
+        .font(.system(size: 20, weight: .semibold, design: .rounded))
+    }
+
+    private func badge(_ label: String, ext: String, flip: Double) -> some View {
+        let p = min(1, max(0, flip / 0.35))
+        let eased = 1 - pow(1 - p, 3)
+        return Text(label)
+            .font(.system(size: 18, weight: .heavy))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).padding(.vertical, 3)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Theme.category(forExt: ext).color.swiftUI))
+            .rotation3DEffect(.degrees((1 - eased) * 80), axis: (x: 1, y: 0, z: 0))
+            .opacity(0.2 + eased * 0.8)
+    }
+}
+
+extension View {
+    /// Fades and slides a view in `delay` seconds after `t` = 0, for staged entrances driven by a TimelineView.
+    func appear(_ t: Double, _ delay: Double) -> some View {
+        let p = min(1, max(0, (t - delay) / 0.45))
+        let e = 1 - pow(1 - p, 3)
+        return opacity(e).offset(y: (1 - e) * 14)
+    }
+}

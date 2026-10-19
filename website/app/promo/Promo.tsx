@@ -33,6 +33,12 @@ function along(keys: Key[], t: number) {
   return keys[keys.length - 1];
 }
 
+/** The opening hook: a file card's format badge flips through these, 0.19s each. */
+const HOOK: [string, string][] = [
+  ["HEIC", "#A855F7"], ["JPG", "#A855F7"], ["PNG", "#A855F7"], ["PDF", "#EF4444"], ["MP4", "#F43F5E"],
+  ["MP3", "#F59E0B"], ["DOCX", "#3B82F6"], ["EPUB", "#3B82F6"], ["XLSX", "#10B981"],
+];
+
 // Desktop window (1500×860) coordinates. The wheel is drawn larger than on the site so it reads on video.
 const C = { x: 750, y: 450 };
 const WS = 1.35;
@@ -106,24 +112,72 @@ export default function Promo() {
     <div className="promo">
       <div className="promo-bg" />
 
-      {/* 1. Logo */}
-      <div className="promo-center" style={{ opacity: fade(t, 0.1, 0.4, 2.2, 2.6) }}>
-        {/* Plain <img>: next/image lazy-loads, which would leave blank frames in the recording. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/shots/icon.png" alt="" className="promo-icon"
-             style={{ transform: `scale(${back(prog(t, 0.15, 0.85))})` }} />
-        <h1 className="promo-title" style={{ opacity: fade(t, 0.6, 1.1), transform: rise(t, 0.6, 1.1) }}>Kaeru</h1>
-        <p className="promo-sub" style={{ opacity: fade(t, 1.0, 1.5), transform: rise(t, 1.0, 1.5) }}>
-          <span className="maru">かえる</span> — “to change”
-        </p>
-      </div>
+      {/* 1. Hook: one file card flipping through formats */}
+      {t < 2.4 && (
+        <div className="promo-center" style={{ opacity: fade(t, 0, 0.15, 1.95, 2.18) }}>
+          <h2 className="promo-hook-line">
+            {/* "Any file." sits centred alone, then slides left as "Any format." arrives. */}
+            <span style={{ opacity: fade(t, 0.05, 0.3), display: "inline-block",
+                           transform: `${rise(t, 0.05, 0.35, 24)} translateX(${(1 - ease(prog(t, 0.72, 1.0))) * 236}px)` }}>Any file.</span>{" "}
+            <span style={{ opacity: fade(t, 0.78, 1.02), transform: rise(t, 0.78, 1.08, 24), display: "inline-block" }} className="promo-grad">Any format.</span>
+          </h2>
+          {(() => {
+            const slot = Math.min(HOOK.length - 1, Math.floor(t / 0.19));
+            const local = (t - slot * 0.19) / 0.19;
+            const morph = ease(prog(t, 1.7, 2.25));
+            const [label, color] = HOOK[slot];
+            return (
+              <div className="promo-hook-stage">
+                <div className="promo-hook-card" style={{
+                  transform: `scale(${lerp(1, 0.62, morph)}) scaleX(${1 + Math.sin(morph * Math.PI) * 0.12})`,
+                  borderRadius: lerp(26, 60, morph), opacity: 1 - morph,
+                }}>
+                  <span className="promo-hook-fold" />
+                  <span className="promo-hook-badge" style={{
+                    background: color,
+                    transform: `perspective(600px) rotateX(${(1 - ease(clamp(local / 0.45))) * 80}deg)`,
+                  }}>{label}</span>
+                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/shots/icon.png" alt="" className="promo-hook-icon"
+                     style={{ opacity: morph, transform: `scale(${lerp(0.7, 1, back(prog(t, 1.8, 2.3)))})` }} />
+                {[0, 0.18].map((d) => {
+                  const p = prog(t, 1.8 + d, 2.6 + d);
+                  return p > 0 && p < 1 ? (
+                    <span key={d} className="promo-ripple" style={{ transform: `scale(${lerp(0.6, 2.4, ease(p))})`, opacity: (1 - p) * 0.6 }} />
+                  ) : null;
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
-      {/* 2. Headline */}
-      <div className="promo-center" style={{ opacity: fade(t, 2.6, 2.9, 4.5, 4.85) }}>
+      {/* 2. Name, landing letter by letter */}
+      {t >= 2.08 && t < 3.6 && (
+        <div className="promo-center" style={{ opacity: 1 - ease(prog(t, 3.25, 3.5)), transform: `translateY(${-ease(prog(t, 3.25, 3.5)) * 30}px)` }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/shots/icon.png" alt="" className="promo-icon promo-icon-sm"
+               style={{ opacity: fade(t, 2.1, 2.3), transform: `translateY(${lerp(60, 0, ease(prog(t, 2.1, 2.45)))}px) scale(${lerp(0.85, 1, back(prog(t, 2.1, 2.45)))})` }} />
+          <p className="promo-kana maru" style={{ opacity: fade(t, 2.45, 2.75) }}>かえる</p>
+          <h1 className="promo-title promo-title-letters">
+            {"Kaeru".split("").map((ch, i) => {
+              const p = prog(t, 2.25 + i * 0.06, 2.6 + i * 0.06);
+              return <span key={i} style={{ opacity: clamp(p * 2), transform: `translateY(${(1 - back(p)) * -60}px)` }}>{ch}</span>;
+            })}
+          </h1>
+          <p className="promo-sub" style={{ opacity: fade(t, 2.7, 3.0), transform: rise(t, 2.7, 3.0) }}>
+            Japanese for “to change” — and “frog”.
+          </p>
+        </div>
+      )}
+
+      {/* 3. Headline */}
+      <div className="promo-center" style={{ opacity: fade(t, 3.35, 3.55, 4.5, 4.85) }}>
         <h2 className="promo-headline">
-          <span style={{ opacity: fade(t, 2.65, 3.05), transform: rise(t, 2.65, 3.05, 40), display: "inline-block" }}>Change any file.</span>
+          <span style={{ opacity: fade(t, 3.4, 3.7), transform: rise(t, 3.4, 3.7, 40), display: "inline-block" }}>Change any file.</span>
           <br />
-          <span className="promo-grad" style={{ opacity: fade(t, 3.0, 3.4), transform: rise(t, 3.0, 3.4, 40), display: "inline-block" }}>
+          <span className="promo-grad" style={{ opacity: fade(t, 3.6, 3.95), transform: rise(t, 3.6, 3.95, 40), display: "inline-block" }}>
             Without opening anything.
           </span>
         </h2>

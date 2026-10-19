@@ -1,13 +1,9 @@
-<p align="center">
-  <img src="docs/images/icon.png" width="120" alt="Kaeru icon">
-</p>
-
-<h1 align="center">Kaeru</h1>
-
-<p align="center">
-  <b>Change any file without opening an app.</b><br>
-  Drag a file, hold a key, drop it on what you want. 350+ conversions, all on your Mac.
-</p>
+<a href="https://getkaeru.vercel.app">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.png">
+    <img src="docs/images/banner-light.png" alt="Kaeru — change any file without opening an app. Drag a file, hold Shift, drop on a format.">
+  </picture>
+</a>
 
 <p align="center">
   <a href="https://github.com/NIKSHITH-G/kaeru/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/NIKSHITH-G/kaeru?color=22c578&label=release"></a>
@@ -18,8 +14,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/NIKSHITH-G/kaeru/releases/latest/download/Kaeru.dmg"><b>⬇︎ Download Kaeru.dmg</b></a>
-  &nbsp;·&nbsp; <a href="https://getkaeru.vercel.app/install">Install guide</a>
+  <a href="https://github.com/NIKSHITH-G/kaeru/releases/latest/download/Kaeru.dmg"><img alt="Download Kaeru for macOS" src="https://img.shields.io/badge/Download_for_macOS-Kaeru.dmg-22c578?style=for-the-badge&logo=apple&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="https://getkaeru.vercel.app/install">Install guide</a>
   &nbsp;·&nbsp; <a href="https://getkaeru.vercel.app">Website</a>
   &nbsp;·&nbsp; <a href="docs/kaeru-promo.mp4">25-second video</a>
 </p>
