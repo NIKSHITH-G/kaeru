@@ -105,7 +105,7 @@ inputs=(photo.png photo.heic photo.jpg photo.tiff anim.gif photo.webp logo.svg
         clip.mp4 clip.mov clip.mkv clip.webm tone.wav tone.mp3 tone.flac tone.m4a tone.ogg
         notes.md notes.txt notes.html notes.rtf notes.doc notes.docx notes.odt notes.epub notes.pdf multipage.pdf
         deck.pptx people.csv people.tsv people.xlsx people.ods data.json data.plist subs.srt subs.vtt
-        folder folder.zip folder.tar.gz folder.tar.bz2 folder.7z "${EXTRA_FILES[@]}")
+        folder folder.zip folder.tar.gz folder.tar.bz2 folder.7z ${EXTRA_FILES[@]+"${EXTRA_FILES[@]}"})
 for f in "${inputs[@]}"; do
     [ -e "$f" ] || { echo "skip $f (fixture missing)"; continue; }
     ops=$("$BIN" --list "$f" | grep -v '^Actions' | cut -d: -f2)
