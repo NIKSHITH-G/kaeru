@@ -22,24 +22,21 @@ if let command = arguments.first, command.hasPrefix("--") {
             let mode = WheelMode(rawValue: Int(arguments[1]) ?? 0) ?? .convert
             let targets = Array(files.dropFirst()).filter { $0.lastPathComponent != "dark" }
             let items = Registry.operations(for: targets, mode: mode)
-            let side = WheelView.diameter(forItems: items.count) + 40
-            let view = WheelView(frame: NSRect(x: 0, y: 0, width: side, height: side))
+            let size = WheelView.size(forItems: items.count)
+            let view = WheelView(frame: NSRect(origin: .zero, size: size))
             view.configure(urls: targets, mode: mode, items: items, interactive: false)
+            if let hover = ProcessInfo.processInfo.environment["KAERU_HOVER"].flatMap(Int.init) { view.debugHover(hover) }
             NSApp.appearance = NSAppearance(named: arguments.contains("dark") ? .darkAqua : .aqua)
             view.appearance = NSApp.appearance
             let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
             view.cacheDisplay(in: view.bounds, to: rep)
-            // Composite over a soft backdrop that stands in for the live frosted glass.
+            // Add the window shadow the live wheel gets from the system.
             let out = NSImage(size: view.bounds.size, flipped: false) { rect in
-                let dark = arguments.contains("dark")
-                let ring = NSBezierPath(ovalIn: rect.insetBy(dx: 20 + WheelView.pop, dy: 20 + WheelView.pop))
-                (dark ? NSColor(white: 0.16, alpha: 0.96) : NSColor(white: 0.97, alpha: 0.96)).setFill()
                 let shadow = NSShadow()
-                shadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
-                shadow.shadowBlurRadius = 16
-                shadow.shadowOffset = NSSize(width: 0, height: -5)
-                NSGraphicsContext.saveGraphicsState(); shadow.set(); ring.fill(); NSGraphicsContext.restoreGraphicsState()
-                rep.draw(in: rect)
+                shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
+                shadow.shadowBlurRadius = 18
+                shadow.shadowOffset = NSSize(width: 0, height: -6)
+                NSGraphicsContext.saveGraphicsState(); shadow.set(); rep.draw(in: rect); NSGraphicsContext.restoreGraphicsState()
                 return true
             }
             if let tiff = out.tiffRepresentation, let final = NSBitmapImageRep(data: tiff) {

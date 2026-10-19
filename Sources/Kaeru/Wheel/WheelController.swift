@@ -24,7 +24,7 @@ final class WheelController {
 
         // Size the window for the busiest mode so switching modes never resizes it.
         let counts = WheelMode.allCases.map { Registry.operations(for: urls, mode: $0).count }
-        let side = WheelView.diameter(forItems: counts.max() ?? 0) + 40
+        let size = WheelView.size(forItems: counts.max() ?? 0)
 
         let panel = self.panel ?? WheelPanel()
         self.panel = panel
@@ -47,10 +47,12 @@ final class WheelController {
         }
         panel.interactive = interactive
 
-        var frame = NSRect(x: point.x - side / 2, y: point.y - side / 2, width: side, height: side)
+        // Put the disc's centre (not the window's) under the cursor; the caption hangs below.
+        var frame = NSRect(x: point.x - size.width / 2, y: point.y - WheelView.captionHeight - size.width / 2,
+                           width: size.width, height: size.height)
         if let screen = NSScreen.screens.first(where: { $0.frame.contains(point) })?.visibleFrame {
-            frame.origin.x = min(max(frame.minX, screen.minX), screen.maxX - side)
-            frame.origin.y = min(max(frame.minY, screen.minY), screen.maxY - side)
+            frame.origin.x = min(max(frame.minX, screen.minX), screen.maxX - size.width)
+            frame.origin.y = min(max(frame.minY, screen.minY), screen.maxY - size.height)
         }
         panel.setFrame(frame, display: false)
         let bounds = NSRect(origin: .zero, size: frame.size)
@@ -85,9 +87,10 @@ final class WheelController {
         }
         guard let layer = panel.contentView?.layer else { return }
         let size = panel.frame.size
-        var from = CATransform3DMakeTranslation(size.width / 2, size.height / 2, 0)
-        from = CATransform3DScale(from, 0.88, 0.88, 1)
-        from = CATransform3DTranslate(from, -size.width / 2, -size.height / 2, 0)
+        let pivot = CGPoint(x: size.width / 2, y: WheelView.captionHeight + size.width / 2)
+        var from = CATransform3DMakeTranslation(pivot.x, pivot.y, 0)
+        from = CATransform3DScale(from, 0.9, 0.9, 1)
+        from = CATransform3DTranslate(from, -pivot.x, -pivot.y, 0)
         let spring = CASpringAnimation(keyPath: "transform")
         spring.fromValue = from
         spring.toValue = CATransform3DIdentity

@@ -57,7 +57,8 @@ const INITIAL: DemoFile[] = [
   { id: "c", name: "Thesis.docx", kind: "doc", x: 0.82, y: 0.3 },
 ];
 
-const R_IN = 54, R_OUT = 148, R_MID = (R_IN + R_OUT) / 2;
+// Same proportions as the app's wheel: rounded tiles on a pale plate.
+const R_IN = 62, R_OUT = 152, R_MID = (R_IN + R_OUT) / 2, RIM = 9, GAP = 7, CORNER = 15;
 
 function modeFromKey(e: KeyboardEvent): Mode | null {
   if (e.key === "Shift") return "convert";
@@ -225,65 +226,82 @@ export default function WheelDemo() {
   );
 }
 
+const HINTS: Record<string, string> = {
+  jpg: "works everywhere", png: "lossless", webp: "small, for the web", avif: "smallest", pdf: "document",
+  mp4: "plays everywhere", gif: "animated", mp3: "plays everywhere", wav: "lossless", md: "plain text", epub: "e-book",
+};
+
+/** A rounded annular tile with parallel gaps, matching tilePath() in WheelView.swift. */
+function tilePath(i: number, n: number, ro: number) {
+  const step = (2 * Math.PI) / n, h = GAP / 2, ri = R_IN;
+  const pt = (r: number, a: number) => [Math.sin(a) * r, -Math.cos(a) * r];
+  if (n === 1) return `M0,${-ro} A${ro},${ro} 0 1 1 0,${ro} A${ro},${ro} 0 1 1 0,${-ro} Z M0,${-ri} A${ri},${ri} 0 1 0 0,${ri} A${ri},${ri} 0 1 0 0,${-ri} Z`;
+  const a0 = i * step, a1 = (i + 1) * step;
+  const os = a0 + Math.asin(h / ro), oe = a1 - Math.asin(h / ro), is = a0 + Math.asin(h / ri), ie = a1 - Math.asin(h / ri);
+  const co = CORNER / ro, ci = (CORNER * 0.75) / ri;
+  const [osx, osy] = pt(ro, os), [oex, oey] = pt(ro, oe), [isx, isy] = pt(ri, is), [iex, iey] = pt(ri, ie);
+  const along = (x0: number, y0: number, x1: number, y1: number, d: number) => {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    return [x0 + ((x1 - x0) / len) * d, y0 + ((y1 - y0) / len) * d];
+  };
+  const [s0x, s0y] = along(osx, osy, isx, isy, CORNER), [s1x, s1y] = pt(ro, os + co), [s2x, s2y] = pt(ro, oe - co);
+  const [s3x, s3y] = along(oex, oey, iex, iey, CORNER), [s4x, s4y] = along(iex, iey, oex, oey, CORNER * 0.75);
+  const [s5x, s5y] = pt(ri, ie - ci), [s6x, s6y] = pt(ri, is + ci), [s7x, s7y] = along(isx, isy, osx, osy, CORNER * 0.75);
+  const large = oe - os > Math.PI ? 1 : 0;
+  return `M${s0x},${s0y} Q${osx},${osy} ${s1x},${s1y} A${ro},${ro} 0 ${large} 1 ${s2x},${s2y} Q${oex},${oey} ${s3x},${s3y}
+    L${s4x},${s4y} Q${iex},${iey} ${s5x},${s5y} A${ri},${ri} 0 ${large} 0 ${s6x},${s6y} Q${isx},${isy} ${s7x},${s7y} Z`;
+}
+
 function Wheel({ x, y, mode, ops, hover, fileName }: {
   x: number; y: number; mode: Mode; ops: Op[]; hover: number | null; fileName: string;
 }) {
   const n = Math.max(ops.length, 1);
   const step = (2 * Math.PI) / n;
-  const pt = (r: number, a: number) => [Math.sin(a) * r, -Math.cos(a) * r];
-  const arc = (i: number, outer: number) => {
-    const gap = 0.012;
-    const a0 = i * step + gap, a1 = (i + 1) * step - gap;
-    const [x0, y0] = pt(outer, a0), [x1, y1] = pt(outer, a1), [x2, y2] = pt(R_IN + 2, a1), [x3, y3] = pt(R_IN + 2, a0);
-    const large = a1 - a0 > Math.PI ? 1 : 0;
-    return `M${x0},${y0} A${outer},${outer} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${R_IN + 2},${R_IN + 2} 0 ${large} 0 ${x3},${y3} Z`;
-  };
   const hovered = hover !== null && hover >= 0 ? ops[hover] : null;
-  const color = (op: Op) => COLORS[op.category];
-  const size = (R_OUT + 12) * 2;
+  const accent = MODE_COLORS[mode];
+  const size = (R_OUT + RIM + 8) * 2;
+  const pill = hover === -1 ? "Cancel" : hovered ? hovered.label : MODE_TITLES[mode];
+  const pillWidth = Math.max(96, pill.length * 9 + 40);
+  const caption = hover === -1 ? "Drop here to cancel"
+    : hovered?.ext ? `Convert ${fileName} to ${hovered.label}${HINTS[hovered.ext] ? ` · ${HINTS[hovered.ext]}` : ""}`
+    : hovered ? `${hovered.label} · ${fileName}` : fileName;
 
   return (
     <div className="wheel" style={{ left: x, top: y, width: size, height: size }}>
       <svg viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`} width={size} height={size}>
-        <circle r={R_OUT} className="wheel-glass" />
+        <defs>
+          <radialGradient id="tile-light" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stopColor="var(--tile-hi)" /><stop offset="100%" stopColor="var(--tile-lo)" />
+          </radialGradient>
+          <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--plate-hi)" /><stop offset="100%" stopColor="var(--plate-lo)" />
+          </linearGradient>
+        </defs>
+        <circle r={R_OUT + RIM} fill="url(#plate)" className="wheel-plate" />
         {ops.map((op, i) => {
           const on = i === hover;
-          const [lx, ly] = pt(R_MID + (on ? 4 : 0), (i + 0.5) * step);
+          const a = (i + 0.5) * step;
+          const lx = Math.sin(a) * R_MID, ly = -Math.cos(a) * R_MID;
           return (
-            <g key={op.label + i}>
-              <path d={arc(i, on ? R_OUT + 8 : R_OUT - 2)} fill={on ? color(op) : "var(--wheel-slice)"}
-                    style={on ? { filter: `drop-shadow(0 0 10px ${color(op)}88)` } : undefined} />
-              {op.ext ? (
-                <g transform={`translate(${lx},${ly - 5})`}>
-                  <rect x={-op.label.length * 4.6 - 9} y={-11} width={op.label.length * 9.2 + 18} height={22} rx={7}
-                        fill={on ? "#fff" : color(op)} />
-                  <text textAnchor="middle" dy="4.5" className="wheel-badge" fill={on ? color(op) : "#fff"}>{op.label}</text>
-                  {op.hint && <text textAnchor="middle" dy="27" className="wheel-hint" fill={on ? "#ffffffd9" : "var(--muted)"}>{op.hint}</text>}
-                </g>
-              ) : (
-                <g transform={`translate(${lx},${ly})`}>
-                  <circle r={13} cy={-8} fill={on ? "#fff" : color(op)} />
-                  <text textAnchor="middle" y={-3.5} className="wheel-glyph" fill={on ? color(op) : "#fff"}>{op.label[0]}</text>
-                  <text textAnchor="middle" y={20} className="wheel-label" fill={on ? "#fff" : "var(--fg)"}>{op.label}</text>
-                </g>
-              )}
+            <g key={op.label + i} className={on ? "tile is-on" : "tile"}>
+              <path d={tilePath(i, n, on ? R_OUT + 5 : R_OUT)} fill={on ? accent : "url(#tile-light)"}
+                    style={on ? { filter: `drop-shadow(0 6px 14px ${accent}73)` } : undefined} />
+              <text x={lx} y={ly} textAnchor="middle" dominantBaseline="central"
+                    className={op.ext ? "tile-format" : "tile-label"} fill={on ? "#fff" : "var(--fg)"}>{op.label}</text>
             </g>
           );
         })}
-        <circle r={R_IN - 6} className={`wheel-center ${hover === -1 ? "is-cancel" : ""}`} />
-        <text textAnchor="middle" y={-4} className="wheel-title" fill={hover === -1 ? "#ef4444" : "var(--fg)"}>
-          {hover === -1 ? "Cancel" : hovered ? hovered.label : MODE_TITLES[mode]}
-        </text>
-        <text textAnchor="middle" y={11} className="wheel-sub">
-          {hovered?.ext ? `→ ${base(fileName)}.${hovered.ext}` : fileName}
-        </text>
+        <rect x={-pillWidth / 2} y={-27} width={pillWidth} height={40} rx={20} className="wheel-pill" />
+        <text y={-7} textAnchor="middle" dominantBaseline="central" className="wheel-pill-text"
+              fill={hover === -1 ? "#ef4444" : hovered ? "var(--fg)" : "var(--muted)"}>{pill}</text>
         {(Object.keys(MODE_KEYS) as Mode[]).map((m, i) => (
-          <g key={m} transform={`translate(${(i - 1) * 22},${R_IN - 26})`}>
-            <rect x={-10} y={-8} width={20} height={16} rx={5} fill={m === mode ? MODE_COLORS[m] : "transparent"} />
-            <text textAnchor="middle" dy="4" className="wheel-key" fill={m === mode ? "#fff" : "var(--muted)"}>{MODE_KEYS[m]}</text>
+          <g key={m} transform={`translate(${(i - 1) * 24},${26})`}>
+            <rect x={-10} y={-8} width={20} height={16} rx={5} fill={m === mode ? `${accent}29` : "transparent"} />
+            <text textAnchor="middle" dy="4" className="wheel-key" fill={m === mode ? accent : "var(--muted)"}>{MODE_KEYS[m]}</text>
           </g>
         ))}
       </svg>
+      <div className="wheel-caption">{caption}</div>
     </div>
   );
 }

@@ -11,14 +11,24 @@ final class WheelView: NSView {
     /// Index of the highlighted slice; -1 is the centre (cancel), nil is nothing.
     private var hovered: Int?
 
-    static let pop: CGFloat = 7
+    static let pop: CGFloat = 5
+    /// Room under the disc for the caption capsule ("Convert photo.heic to PNG").
+    static let captionHeight: CGFloat = 50
+    /// Rim of base disc around the tiles, and the gap between neighbouring tiles.
+    private static let rim: CGFloat = 9, gap: CGFloat = 7, corner: CGFloat = 16
 
     static func radii(forItems n: Int) -> (inner: CGFloat, mid: CGFloat, outer: CGFloat) {
-        let mid = max(112, CGFloat(n) * 72 / (2 * .pi))
-        return (mid - 52, mid, mid + 52)
+        let mid = max(120, CGFloat(n) * 78 / (2 * .pi))
+        return (mid - 60, mid, mid + 60)
     }
 
-    static func diameter(forItems n: Int) -> CGFloat { (radii(forItems: n).outer + pop) * 2 }
+    static func diameter(forItems n: Int) -> CGFloat { (radii(forItems: n).outer + rim + pop) * 2 }
+
+    /// Window size for a wheel whose busiest mode has `n` items; the disc sits above the caption.
+    static func size(forItems n: Int) -> NSSize {
+        let side = diameter(forItems: n) + 40
+        return NSSize(width: side, height: side + captionHeight)
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -49,14 +59,15 @@ final class WheelView: NSView {
         let g = geometry
         return NSImage(size: bounds.size, flipped: false) { _ in
             NSColor.black.setFill()
-            NSBezierPath(ovalIn: self.circle(g.outer)).fill()
+            NSBezierPath(ovalIn: self.circle(g.outer + Self.rim)).fill()
             return true
         }
     }
 
     // MARK: Geometry
 
-    private var center: NSPoint { NSPoint(x: bounds.midX, y: bounds.midY) }
+    /// Disc centre: the middle of the top square of the view, leaving the caption strip below.
+    private var center: NSPoint { NSPoint(x: bounds.midX, y: Self.captionHeight + bounds.width / 2) }
     private var geometry: (inner: CGFloat, mid: CGFloat, outer: CGFloat) { Self.radii(forItems: items.count) }
     private var step: CGFloat { 2 * .pi / CGFloat(max(items.count, 1)) }
     private func startAngle(_ i: Int) -> CGFloat { .pi / 2 - CGFloat(i) * step }  // clockwise from 12 o'clock
@@ -80,178 +91,203 @@ final class WheelView: NSView {
         needsDisplay = true
     }
 
+    fileprivate func setHoveredForDebug(_ index: Int) { hovered = index; needsDisplay = true }
+
     private var isDark: Bool { effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
 
     // MARK: Drawing
 
+    private var accent: NSColor { [Theme.brand, Theme.Category.tool.color, Theme.Category.action.color][mode.rawValue] }
+
     override func draw(_ dirtyRect: NSRect) {
         let g = geometry
-        // A light tint over the glass keeps labels readable on busy wallpapers.
-        (isDark ? NSColor(white: 0.08, alpha: 0.55) : NSColor(white: 1, alpha: 0.55)).setFill()
-        NSBezierPath(ovalIn: circle(g.outer)).fill()
-
-        for i in items.indices where i != hovered { drawSlice(i, highlighted: false) }
-        if let h = hovered, items.indices.contains(h) { drawSlice(h, highlighted: true) }
-
-        NSColor.separatorColor.withAlphaComponent(0.6).setStroke()
-        let rim = NSBezierPath(ovalIn: circle(g.outer).insetBy(dx: 0.5, dy: 0.5))
-        rim.lineWidth = 1
-        rim.stroke()
-
-        drawCenter(radius: g.inner - 6)
+        drawBase(radius: g.outer + Self.rim)
+        for i in items.indices where i != hovered { drawTile(i, highlighted: false) }
+        if let h = hovered, items.indices.contains(h) { drawTile(h, highlighted: true) }
+        drawCenter(radius: g.inner - Self.gap)
+        drawCaption(below: g.outer + Self.rim)
     }
 
-    private func slicePath(_ i: Int, outer: CGFloat) -> NSBezierPath {
-        let g = geometry
-        let gap: CGFloat = items.count > 1 ? 0.012 : 0
-        let a0 = (startAngle(i) - gap) * 180 / .pi, a1 = (startAngle(i + 1) + gap) * 180 / .pi
-        let path = NSBezierPath()
+    /// The soft disc the tiles sit in: a pale, slightly translucent plate over the glass blur.
+    private func drawBase(radius: CGFloat) {
+        let disc = NSBezierPath(ovalIn: circle(radius))
+        let top = isDark ? NSColor(white: 0.17, alpha: 0.9) : NSColor(white: 0.955, alpha: 0.9)
+        let bottom = isDark ? NSColor(white: 0.12, alpha: 0.9) : NSColor(white: 0.9, alpha: 0.9)
+        NSGradient(starting: top, ending: bottom)?.draw(in: disc, angle: -90)
+        (isDark ? NSColor(white: 1, alpha: 0.08) : NSColor(white: 0, alpha: 0.07)).setStroke()
+        disc.lineWidth = 1
+        disc.stroke()
+    }
+
+    /// A rounded annular tile with parallel gaps to its neighbours, like a pillow on the plate.
+    private func tilePath(_ i: Int, outer ro: CGFloat) -> NSBezierPath {
+        let ri = geometry.inner
+        let h = Self.gap / 2, rc = Self.corner
+        let a0 = startAngle(i), a1 = startAngle(i + 1)  // clockwise: a0 > a1
         if items.count == 1 {
-            path.appendOval(in: circle(outer))
-            path.appendOval(in: circle(g.inner))
-            path.windingRule = .evenOdd
-            return path
+            let ring = NSBezierPath(ovalIn: circle(ro))
+            ring.append(NSBezierPath(ovalIn: circle(ri)).reversed)
+            return ring
         }
-        path.appendArc(withCenter: center, radius: outer, startAngle: a0, endAngle: a1, clockwise: true)
-        path.appendArc(withCenter: center, radius: g.inner + 2, startAngle: a1, endAngle: a0, clockwise: false)
-        path.close()
-        return path
+        // Corner angles, offset so each edge runs parallel to the radial line at distance h.
+        let os = a0 - asin(h / ro), oe = a1 + asin(h / ro)
+        let ins = a0 - asin(h / ri), ine = a1 + asin(h / ri)
+        func p(_ r: CGFloat, _ a: CGFloat) -> CGPoint { CGPoint(x: center.x + r * cos(a), y: center.y + r * sin(a)) }
+        let path = CGMutablePath()
+        let outerStart = p(ro, os), outerEnd = p(ro, oe), innerEnd = p(ri, ine), innerStart = p(ri, ins)
+        path.move(to: CGPoint(x: (outerStart.x + innerStart.x) / 2, y: (outerStart.y + innerStart.y) / 2))
+        // Outer-start corner, then along the outer arc (clockwise), then outer-end corner.
+        path.addArc(tangent1End: outerStart, tangent2End: p(ro, os - 0.3), radius: rc)
+        path.addArc(center: center, radius: ro, startAngle: os - rc / ro, endAngle: oe + rc / ro, clockwise: true)
+        path.addArc(tangent1End: outerEnd, tangent2End: innerEnd, radius: rc)
+        // Inner-end corner, back along the inner arc (counter-clockwise), inner-start corner.
+        path.addArc(tangent1End: innerEnd, tangent2End: p(ri, ine + 0.3), radius: rc * 0.75)
+        path.addArc(center: center, radius: ri, startAngle: ine + rc * 0.75 / ri, endAngle: ins - rc * 0.75 / ri, clockwise: false)
+        path.addArc(tangent1End: innerStart, tangent2End: outerStart, radius: rc * 0.75)
+        path.closeSubpath()
+        return NSBezierPath(path)
     }
 
-    private func drawSlice(_ i: Int, highlighted: Bool) {
+    private func drawTile(_ i: Int, highlighted: Bool) {
         let g = geometry
         let item = items[i]
-        let tint = Theme.color(for: item, mode: mode)
-        let path = slicePath(i, outer: highlighted ? g.outer + Self.pop : g.outer - 2)
-        if highlighted {
-            NSGraphicsContext.saveGraphicsState()
-            let shadow = NSShadow()
-            shadow.shadowColor = tint.withAlphaComponent(0.55)
-            shadow.shadowBlurRadius = 14
-            shadow.set()
-            tint.setFill()
-            path.fill()
-            NSGraphicsContext.restoreGraphicsState()
-        } else {
-            (isDark ? NSColor(white: 1, alpha: 0.04) : NSColor(white: 0, alpha: 0.025)).setFill()
-            path.fill()
-        }
-
+        let path = tilePath(i, outer: highlighted ? g.outer + Self.pop : g.outer)
         let angle = startAngle(i) - step / 2
-        let r = g.mid + (highlighted ? Self.pop / 2 : 0)
-        let p = NSPoint(x: center.x + r * cos(angle), y: center.y + r * sin(angle))
+        let labelPoint = NSPoint(x: center.x + g.mid * cos(angle), y: center.y + g.mid * sin(angle))
+
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = highlighted ? accent.withAlphaComponent(0.45) : NSColor.black.withAlphaComponent(isDark ? 0.35 : 0.07)
+        shadow.shadowBlurRadius = highlighted ? 16 : 3
+        shadow.shadowOffset = NSSize(width: 0, height: highlighted ? -4 : -1)
+        shadow.set()
+        (highlighted ? accent : (isDark ? NSColor(white: 0.2, alpha: 1) : .white)).setFill()
+        path.fill()
+        NSGraphicsContext.restoreGraphicsState()
+
+        // Pillow shading: a soft highlight in the middle of the tile fading to its edges.
+        NSGraphicsContext.saveGraphicsState()
+        path.addClip()
+        let light = highlighted ? accent.blended(withFraction: 0.25, of: .white)! : (isDark ? NSColor(white: 0.25, alpha: 1) : .white)
+        let edge = highlighted ? accent.blended(withFraction: 0.12, of: .black)! : (isDark ? NSColor(white: 0.17, alpha: 1) : NSColor(white: 0.93, alpha: 1))
+        NSGradient(starting: light, ending: edge)?.draw(fromCenter: labelPoint, radius: 0, toCenter: labelPoint, radius: 78, options: .drawsAfterEndingLocation)
+        NSGraphicsContext.restoreGraphicsState()
+
+        (highlighted ? NSColor(white: 1, alpha: 0.25) : (isDark ? NSColor(white: 1, alpha: 0.07) : NSColor(white: 0, alpha: 0.09))).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+
+        let ink = highlighted ? NSColor.white : NSColor.labelColor
+        let width = min(2 * g.mid * sin(step / 2) * 0.86, 96)
         if mode == .convert {
-            drawBadge(item.title, at: NSPoint(x: p.x, y: p.y + 6), tint: tint, inverted: highlighted)
-            if let sub = subtitle(for: item) {
-                drawText(sub, at: NSPoint(x: p.x, y: p.y - 18), size: 9.5, weight: .medium,
-                         color: highlighted ? .white.withAlphaComponent(0.85) : .secondaryLabelColor, width: 80)
-            }
+            drawText(item.title.uppercased(), at: NSPoint(x: labelPoint.x, y: labelPoint.y - 10), size: item.title.count > 5 ? 13 : 16,
+                     weight: .bold, color: ink, width: width, kern: 0.4)
         } else {
-            drawSymbol(item.symbol, at: NSPoint(x: p.x, y: p.y + 9), tint: tint, inverted: highlighted)
-            drawText(item.title, at: NSPoint(x: p.x, y: p.y - 21), size: 10.5, weight: .semibold,
-                     color: highlighted ? .white : .labelColor, width: min(2 * r * sin(step / 2) * 0.92, 94))
+            drawSymbol(item.symbol, at: NSPoint(x: labelPoint.x, y: labelPoint.y + 9), color: highlighted ? .white : .secondaryLabelColor)
+            drawText(item.title, at: NSPoint(x: labelPoint.x, y: labelPoint.y - 18), size: 11, weight: .semibold, color: ink, width: width)
         }
     }
 
-    /// A short hint under format badges, e.g. "Smaller" for WebP.
-    private func subtitle(for op: FileOperation) -> String? {
-        guard let ext = op.targetExt else { return nil }
-        let hints = ["jpg": "Universal", "png": "Lossless", "heic": "Apple", "webp": "Web", "avif": "Smallest",
-                     "pdf": "Document", "mp4": "Universal", "mov": "Apple", "gif": "Animated", "mp3": "Audio",
-                     "m4a": "Audio", "wav": "Lossless", "flac": "Lossless", "docx": "Word", "md": "Text",
-                     "xlsx": "Excel", "csv": "Plain", "zip": "Archive", "pptx": "Slides", "epub": "E-book"]
-        return hints[ext]
-    }
-
-    private func drawBadge(_ text: String, at p: NSPoint, tint: NSColor, inverted: Bool) {
-        let font = NSFont.systemFont(ofSize: text.count > 5 ? 10.5 : 12.5, weight: .bold)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: inverted ? tint : NSColor.white]
-        let size = (text as NSString).size(withAttributes: attrs)
-        let rect = NSRect(x: p.x - size.width / 2 - 9, y: p.y - 11, width: size.width + 18, height: 22)
-        (inverted ? NSColor.white : tint).setFill()
-        NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7).fill()
-        (text as NSString).draw(at: NSPoint(x: rect.minX + 9, y: rect.midY - size.height / 2), withAttributes: attrs)
-    }
-
-    private func drawSymbol(_ name: String, at p: NSPoint, tint: NSColor, inverted: Bool) {
-        let disc = NSRect(x: p.x - 16, y: p.y - 16, width: 32, height: 32)
-        (inverted ? NSColor.white : tint).setFill()
-        NSBezierPath(ovalIn: disc).fill()
-        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-            .applying(.init(paletteColors: [inverted ? tint : .white]))
+    private func drawSymbol(_ name: String, at p: NSPoint, color: NSColor) {
+        let config = NSImage.SymbolConfiguration(pointSize: 17, weight: .medium).applying(.init(paletteColors: [color]))
         guard let symbol = (NSImage(systemSymbolName: name, accessibilityDescription: nil)
             ?? NSImage(systemSymbolName: "circle", accessibilityDescription: nil))?.withSymbolConfiguration(config) else { return }
         let s = symbol.size
         symbol.draw(in: NSRect(x: p.x - s.width / 2, y: p.y - s.height / 2, width: s.width, height: s.height))
     }
 
-    private func drawText(_ text: String, at p: NSPoint, size: CGFloat, weight: NSFont.Weight, color: NSColor, width: CGFloat) {
+    private func drawText(_ text: String, at p: NSPoint, size: CGFloat, weight: NSFont.Weight, color: NSColor, width: CGFloat,
+                          kern: CGFloat = 0) {
         let style = NSMutableParagraphStyle()
         style.alignment = .center
         style.lineBreakMode = .byTruncatingTail
-        (text as NSString).draw(in: NSRect(x: p.x - width / 2, y: p.y, width: width, height: size + 5), withAttributes: [
-            .font: NSFont.systemFont(ofSize: size, weight: weight), .foregroundColor: color, .paragraphStyle: style,
+        (text as NSString).draw(in: NSRect(x: p.x - width / 2, y: p.y, width: width, height: size + 6), withAttributes: [
+            .font: NSFont.systemFont(ofSize: size, weight: weight), .foregroundColor: color, .paragraphStyle: style, .kern: kern,
         ])
     }
 
+    /// The hole in the middle holds a floating pill naming the current choice, and the mode keys.
     private func drawCenter(radius r: CGFloat) {
-        let disc = NSBezierPath(ovalIn: circle(r))
-        (isDark ? NSColor(white: 0.13, alpha: 0.92) : NSColor(white: 1, alpha: 0.92)).setFill()
-        disc.fill()
-        if hovered == -1 {
-            NSColor.systemRed.withAlphaComponent(0.12).setFill()
-            disc.fill()
-        }
-        NSColor.separatorColor.setStroke()
-        disc.lineWidth = 1
-        disc.stroke()
-
-        // File thumbnail.
-        let thumbSize: CGFloat = 34
-        if let thumbnail {
-            thumbnail.draw(in: NSRect(x: center.x - thumbSize / 2, y: center.y + 12, width: thumbSize, height: thumbSize),
-                           from: .zero, operation: .sourceOver, fraction: 1)
-        }
-
-        let textWidth = r * 2 - 22
-        let name = urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) items"
         let hoveredItem = hovered.flatMap { items.indices.contains($0) ? items[$0] : nil }
-        if hovered == -1 {
-            drawText("Cancel", at: NSPoint(x: center.x, y: center.y - 6), size: 13, weight: .semibold, color: .systemRed, width: textWidth)
-        } else if let op = hoveredItem {
-            drawText(op.title, at: NSPoint(x: center.x, y: center.y - 6), size: 13, weight: .semibold, color: .labelColor, width: textWidth)
-            drawText(preview(for: op), at: NSPoint(x: center.x, y: center.y - 21), size: 9.5, weight: .regular,
-                     color: .secondaryLabelColor, width: textWidth)
-        } else {
-            drawText(items.isEmpty ? "Nothing here" : mode.title, at: NSPoint(x: center.x, y: center.y - 6), size: 13,
-                     weight: .semibold, color: .labelColor, width: textWidth)
-            drawText(name, at: NSPoint(x: center.x, y: center.y - 21), size: 9.5, weight: .regular,
-                     color: .secondaryLabelColor, width: textWidth)
-        }
-        drawModeSwitcher(y: center.y - r + 12)
-    }
+        let label: String
+        let ink: NSColor
+        if hovered == -1 { label = "Cancel"; ink = .systemRed }
+        else if let op = hoveredItem { label = mode == .convert ? op.title.uppercased() : op.title; ink = .labelColor }
+        else { label = items.isEmpty ? "Nothing here" : mode.title; ink = .secondaryLabelColor }
 
-    /// "photo.jpg" — what the result will be called.
-    private func preview(for op: FileOperation) -> String {
-        guard let ext = op.targetExt, urls.count == 1 else { return urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) items" }
-        return "→ " + urls[0].deletingPathExtension().lastPathComponent + "." + ext
-    }
+        let font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
+        let pillWidth = min(max(textWidth + 40, 92), r * 2 - 14)
+        let pill = NSRect(x: center.x - pillWidth / 2, y: center.y - 13, width: pillWidth, height: 40)
+        let path = NSBezierPath(roundedRect: pill, xRadius: 20, yRadius: 20)
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(isDark ? 0.45 : 0.1)
+        shadow.shadowBlurRadius = 12
+        shadow.shadowOffset = NSSize(width: 0, height: -3)
+        shadow.set()
+        (isDark ? NSColor(white: 0.22, alpha: 1) : .white).setFill()
+        path.fill()
+        NSGraphicsContext.restoreGraphicsState()
+        drawText(label, at: NSPoint(x: center.x, y: pill.minY + 9), size: 15, weight: .semibold, color: ink, width: pillWidth - 16)
 
-    private func drawModeSwitcher(y: CGFloat) {
+        // Mode keys, small and quiet, under the pill.
         let modes = WheelMode.allCases
-        let w: CGFloat = 20, gap: CGFloat = 4
-        let total = CGFloat(modes.count) * w + CGFloat(modes.count - 1) * gap
+        let w: CGFloat = 19, spacing: CGFloat = 5
+        let total = CGFloat(modes.count) * w + CGFloat(modes.count - 1) * spacing
         for (i, m) in modes.enumerated() {
-            let rect = NSRect(x: center.x - total / 2 + CGFloat(i) * (w + gap), y: y, width: w, height: 16)
-            let active = m == mode
-            if active {
-                [Theme.brand, Theme.Category.tool.color, Theme.Category.action.color][m.rawValue].setFill()
+            let rect = NSRect(x: center.x - total / 2 + CGFloat(i) * (w + spacing), y: pill.minY - 26, width: w, height: 16)
+            if m == mode {
+                accent.withAlphaComponent(0.16).setFill()
                 NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
             }
             let glyph = interactive ? "\(i + 1)" : Settings.modifier(for: m).glyph
             drawText(glyph, at: NSPoint(x: rect.midX, y: rect.minY + 1), size: 10, weight: .bold,
-                     color: active ? .white : .tertiaryLabelColor, width: w)
+                     color: m == mode ? accent : .tertiaryLabelColor, width: w)
         }
+    }
+
+    /// "Convert photo.heic to PNG" in a small capsule under the disc, with the file's thumbnail.
+    private func drawCaption(below radius: CGFloat) {
+        let hoveredItem = hovered.flatMap { items.indices.contains($0) ? items[$0] : nil }
+        let name = urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) items"
+        let text: String
+        if hovered == -1 { text = "Drop here to cancel" }
+        else if let op = hoveredItem {
+            switch mode {
+            case .convert: text = "Convert \(name) to \(op.title.uppercased())" + (hint(for: op).map { " · \($0)" } ?? "")
+            case .tools, .actions: text = "\(op.title) · \(name)"
+            }
+        } else { text = name }
+
+        let font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        let textWidth = min((text as NSString).size(withAttributes: [.font: font]).width, bounds.width - 80)
+        let thumb: CGFloat = thumbnail == nil ? 0 : 20
+        let width = textWidth + thumb + (thumb > 0 ? 8 : 0) + 26
+        let rect = NSRect(x: center.x - width / 2, y: center.y - radius - Self.pop - 38, width: width, height: 30)
+        let capsule = NSBezierPath(roundedRect: rect, xRadius: 15, yRadius: 15)
+        (isDark ? NSColor(white: 0.14, alpha: 0.92) : NSColor(white: 1, alpha: 0.92)).setFill()
+        capsule.fill()
+        (isDark ? NSColor(white: 1, alpha: 0.08) : NSColor(white: 0, alpha: 0.08)).setStroke()
+        capsule.lineWidth = 1
+        capsule.stroke()
+        if let thumbnail, thumb > 0 {
+            thumbnail.draw(in: NSRect(x: rect.minX + 11, y: rect.midY - thumb / 2, width: thumb, height: thumb),
+                           from: .zero, operation: .sourceOver, fraction: 1)
+        }
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingMiddle
+        (text as NSString).draw(in: NSRect(x: rect.minX + 13 + thumb + (thumb > 0 ? 6 : 0), y: rect.minY + 7, width: textWidth + 2, height: 17),
+                                withAttributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style])
+    }
+
+    private func hint(for op: FileOperation) -> String? {
+        guard let ext = op.targetExt else { return nil }
+        let hints = ["jpg": "works everywhere", "png": "lossless", "heic": "small, Apple devices", "webp": "small, for the web",
+                     "avif": "smallest", "pdf": "document", "mp4": "plays everywhere", "mov": "Apple devices", "gif": "animated",
+                     "mp3": "plays everywhere", "wav": "lossless", "flac": "lossless", "docx": "Word", "md": "plain text",
+                     "xlsx": "Excel", "pptx": "PowerPoint", "epub": "e-book", "zip": "archive", "ico": "Windows icon", "icns": "macOS icon"]
+        return hints[ext]
     }
 
     // MARK: Drag and drop
@@ -336,5 +372,31 @@ final class WheelView: NSView {
         guard !items.isEmpty else { return }
         let current = hovered.flatMap { $0 >= 0 ? $0 : nil } ?? (delta > 0 ? -1 : 0)
         setHovered((current + delta + items.count) % items.count)
+    }
+}
+
+extension WheelView {
+    /// For `--render-wheel` design checks: highlight a slice without a mouse.
+    func debugHover(_ index: Int) { setHoveredForDebug(index) }
+}
+
+private extension NSBezierPath {
+    /// NSBezierPath(cgPath:) needs macOS 14; this copies the elements on any version.
+    convenience init(_ cgPath: CGPath) {
+        self.init()
+        cgPath.applyWithBlock { element in
+            let p = element.pointee.points
+            switch element.pointee.type {
+            case .moveToPoint: move(to: p[0])
+            case .addLineToPoint: line(to: p[0])
+            case .addQuadCurveToPoint:
+                let start = currentPoint
+                curve(to: p[1], controlPoint1: CGPoint(x: start.x + 2 / 3 * (p[0].x - start.x), y: start.y + 2 / 3 * (p[0].y - start.y)),
+                      controlPoint2: CGPoint(x: p[1].x + 2 / 3 * (p[0].x - p[1].x), y: p[1].y + 2 / 3 * (p[0].y - p[1].y)))
+            case .addCurveToPoint: curve(to: p[2], controlPoint1: p[0], controlPoint2: p[1])
+            case .closeSubpath: close()
+            @unknown default: break
+            }
+        }
     }
 }
