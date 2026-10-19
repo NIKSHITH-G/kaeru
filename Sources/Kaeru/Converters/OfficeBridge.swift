@@ -74,6 +74,11 @@ enum OfficeApps {
         try await wordExport(input, output, format: "format RTF")
     }
 
+    /// Has Word rebuild a PDF as an editable DOCX or RTF, keeping pictures, tables and styles.
+    static func pdfToWord(_ input: URL, _ output: URL) async throws {
+        try await wordExport(input, output, format: output.pathExtension.lowercased() == "rtf" ? "format RTF" : "format document")
+    }
+
     private static func wordExport(_ input: URL, _ output: URL, format: String) async throws {
         guard hasWord else { throw fail("Microsoft Word isn't installed") }
         try await viaLockName(output) { tmp in
@@ -82,28 +87,37 @@ enum OfficeApps {
             on run argv
                 set wasRunning to application "Microsoft Word" is running
                 tell application "Microsoft Word"
-                    open POSIX file (item 1 of argv)
-                    set doc to missing value
-                    repeat with i from 1 to 480
-                        try
-                            set names to name of every document
-                            repeat with j from 1 to count of names
-                                if item j of names is (item 3 of argv) then set doc to document j
-                            end repeat
-                        end try
-                        if doc is not missing value then exit repeat
-                        delay 0.25
-                        -- An app that was still quitting can drop the open request; ask again.
-                        if i mod 40 is 0 then open POSIX file (item 1 of argv)
-                    end repeat
-                    if doc is missing value then error "Word didn't open the document"
-                    save as doc file name (item 2 of argv) file format \(format)
-                    -- Saving as anything but PDF renames the open document to the new file.
+                    -- Opening a PDF normally asks before converting it; skip that and any other alert.
+                    set oldAlerts to display alerts
+                    set display alerts to alerts none
                     try
-                        close doc saving no
-                    on error
-                        close document (item 4 of argv) saving no
+                        open POSIX file (item 1 of argv)
+                        set doc to missing value
+                        repeat with i from 1 to 480
+                            try
+                                set names to name of every document
+                                repeat with j from 1 to count of names
+                                    if item j of names is (item 3 of argv) then set doc to document j
+                                end repeat
+                            end try
+                            if doc is not missing value then exit repeat
+                            delay 0.25
+                            -- An app that was still quitting can drop the open request; ask again.
+                            if i mod 40 is 0 then open POSIX file (item 1 of argv)
+                        end repeat
+                        if doc is missing value then error "Word didn't open the document"
+                        save as doc file name (item 2 of argv) file format \(format)
+                        -- Saving as anything but PDF renames the open document to the new file.
+                        try
+                            close doc saving no
+                        on error
+                            close document (item 4 of argv) saving no
+                        end try
+                    on error message number code
+                        set display alerts to oldAlerts
+                        error message number code
                     end try
+                    set display alerts to oldAlerts
                     if not wasRunning and (count of documents) is 0 then quit
                 end tell
             end run

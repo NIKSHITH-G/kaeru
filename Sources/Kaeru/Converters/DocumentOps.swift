@@ -22,7 +22,7 @@ enum DocumentOps {
                     try await toPages(url, out)
                 default:
                     let text = try await load(url)
-                    try await MainActor.run { try write(text, to: out) }
+                    try await save(text, to: out)
                 }
                 return [out]
             }
@@ -51,7 +51,7 @@ enum DocumentOps {
                     try await webPDF(url, out)
                 } else if !done {
                     let text = try await load(url)
-                    try await MainActor.run { try write(text, to: out) }
+                    try await save(text, to: out)
                 }
                 result.outputs.append(out)
                 progress(Double(i + 1) / Double(inputs.count))
@@ -151,6 +151,16 @@ enum DocumentOps {
                                options: [.documentType: NSAttributedString.DocumentType.html,
                                          .characterEncoding: String.Encoding.utf8.rawValue],
                                documentAttributes: nil)
+    }
+
+    /// Writes text in the format `url` names. DOCX goes through Kaeru's own writer, which keeps
+    /// tables; the system's DOCX export flattens them.
+    static func save(_ text: NSAttributedString, to url: URL) async throws {
+        if url.pathExtension.lowercased() == "docx" {
+            try await DOCX.write(text, to: url)
+        } else {
+            try await MainActor.run { try write(text, to: url) }
+        }
     }
 
     @MainActor

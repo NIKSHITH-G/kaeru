@@ -17,14 +17,33 @@ enum PDFOps {
         }
         ops.append(.perFile("pdf.txt", "TXT", "doc.plaintext", ext: "txt") { url, _ in
             let out = Output.file(for: url, ext: "txt")
-            try (try open(url).string ?? "").write(to: out, atomically: true, encoding: .utf8)
+            try plainText(url).write(to: out, atomically: true, encoding: .utf8)
             return [out]
         })
         for (ext, title) in [("md", "Markdown"), ("docx", "DOCX"), ("rtf", "RTF"), ("html", "HTML")] {
-            ops.append(.perFile("pdf.\(ext)", title, "doc.richtext", ext: ext) { url, _ in
-                let out = Output.file(for: url, ext: ext)
-                try await MainActor.run { try DocumentOps.write(try attributedText(url), to: out) }
-                return [out]
+            ops.append(FileOperation(id: "pdf.\(ext)", title: title, symbol: "doc.richtext", targetExt: ext) { inputs, progress in
+                var result = OpResult()
+                for (i, url) in inputs.enumerated() {
+                    let out = Output.file(for: url, ext: ext)
+                    // Word rebuilds a PDF as a real document, with pictures, tables and styles.
+                    var done = false
+                    if ["docx", "rtf"].contains(ext) && OfficeApps.hasWord && hasTextLayer(url) {
+                        do {
+                            try await OfficeApps.pdfToWord(url, out)
+                            done = true
+                        } catch {
+                            NSLog("Kaeru: Word PDF conversion failed, using text extraction: \(error.localizedDescription)")
+                            result.message = "Made without Word, so pictures and layout are left out. Allow Kaeru to control Microsoft Word in System Settings → Privacy & Security → Automation"
+                        }
+                    }
+                    if !done {
+                        let text = try await attributedText(url)
+                        try await DocumentOps.save(text, to: out)
+                    }
+                    result.outputs.append(out)
+                    progress(Double(i + 1) / Double(inputs.count))
+                }
+                return result
             })
         }
         ops.append(.perFile("pdf.pptx", "PPTX", "rectangle.on.rectangle", ext: "pptx") { url, p in
@@ -43,7 +62,8 @@ enum PDFOps {
         })
         ops.append(.perFile("pdf.epub", "EPUB", "book", ext: "epub") { url, _ in
             let out = Output.file(for: url, ext: "epub")
-            let markdown = try await MainActor.run { Markdown.fromAttributed(try attributedText(url)) }
+            let text = try await attributedText(url)
+            let markdown = await MainActor.run { Markdown.fromAttributed(text) }
             try await EPUB.write(title: url.deletingPathExtension().lastPathComponent, markdown: markdown, to: out)
             return [out]
         })
@@ -182,12 +202,47 @@ enum PDFOps {
         return out
     }
 
-    static func attributedText(_ url: URL) throws -> NSAttributedString {
+    static func hasTextLayer(_ url: URL) -> Bool {
+        !((try? open(url).string) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// The PDF's own text, or OCR when it's a scan with no text layer.
+    static func plainText(_ url: URL) throws -> String {
+        if hasTextLayer(url) {
+            let doc = try open(url)
+            return (0..<doc.pageCount).compactMap { i -> String? in
+                guard let page = doc.page(at: i) else { return nil }
+                if let grid = PDFLayout.table(page) { return grid.map { $0.joined(separator: "\t") }.joined(separator: "\n") }
+                return page.string
+            }.joined(separator: "\n\n")
+        }
+        let text = try VisionOps.recognizePDF(url)
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw fail("No text found in \(url.lastPathComponent)") }
+        return text
+    }
+
+    /// Styled text from the PDF; scans with no text layer are read with OCR instead.
+    static func attributedText(_ url: URL) async throws -> NSAttributedString {
+        if !hasTextLayer(url) {
+            let text = try plainText(url)
+            return await MainActor.run {
+                NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 12)])
+            }
+        }
+        return try await MainActor.run { try styledText(url) }
+    }
+
+    @MainActor
+    private static func styledText(_ url: URL) throws -> NSAttributedString {
         let doc = try open(url)
         let result = NSMutableAttributedString()
         for i in 0..<doc.pageCount {
-            if let text = doc.page(at: i)?.attributedString {
-                if result.length > 0 { result.append(NSAttributedString(string: "\n\n")) }
+            guard let page = doc.page(at: i) else { continue }
+            if result.length > 0 { result.append(NSAttributedString(string: "\n\n")) }
+            // Pages that are mostly a table become a real table rather than one column after another.
+            if let grid = PDFLayout.table(page) {
+                result.append(try DocumentOps.html(Markdown.wrap(Markdown.table(grid))))
+            } else if let text = page.attributedString {
                 result.append(joiningWrappedLines(text))
             }
         }

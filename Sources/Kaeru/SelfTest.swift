@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 /// Unit checks for the pure logic, run with `Kaeru --self-test`. A test runner of our own because
 /// XCTest and Swift Testing aren't available with the Command Line Tools alone.
@@ -26,8 +26,32 @@ enum SelfTest {
         kinds()
         registry()
         shelf()
+        documents()
         print(failures == 0 ? "✓ \(count) checks passed" : "\(failures) of \(count) checks failed")
         return failures == 0 ? 0 : 1
+    }
+
+    @MainActor
+    private static func documents() {
+        // Kaeru's own DOCX writer keeps a table as one real table (the system exporter flattens it).
+        if let text = try? DocumentOps.html("<p>Intro</p><table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table><p>Outro</p>") {
+            let xml = DOCX.documentXML(text)
+            expect(xml.components(separatedBy: "<w:tbl>").count == 2 && xml.contains(">B</w:t>") && xml.contains(">Outro</w:t>"),
+                   "DOCX writer keeps tables as tables")
+        } else { expect(false, "HTML import for the DOCX check") }
+
+        // PDF lines that continue a sentence rejoin; a new sentence or a different size does not.
+        let font = NSFont.systemFont(ofSize: 12)
+        let lines = NSAttributedString(string: "The rules we agreed to follow while\ncompleting the work.\nNext paragraph", attributes: [.font: font])
+        expect(PDFOps.joiningWrappedLines(lines).string == "The rules we agreed to follow while completing the work.\nNext paragraph",
+               "Wrapped PDF lines rejoin into paragraphs")
+
+        // Small table type must not make the body text look like headings.
+        let mixed = NSMutableAttributedString(string: String(repeating: "cell ", count: 300) + "\n", attributes: [.font: NSFont.systemFont(ofSize: 8)])
+        mixed.append(NSAttributedString(string: String(repeating: "Body text here. ", count: 60) + "\n", attributes: [.font: font]))
+        mixed.append(NSAttributedString(string: "# column\n", attributes: [.font: font]))
+        let md = Markdown.fromAttributed(mixed)
+        expect(!md.contains("# Body") && md.contains("\\# column"), "Body size ignores small table type; a leading # is escaped")
     }
 
     private static func csv() {

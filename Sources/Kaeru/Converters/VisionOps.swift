@@ -45,6 +45,13 @@ enum VisionOps {
 
     /// OCR for scanned PDFs that have no text layer: renders each page and recognizes it.
     static func ocrPDF(_ url: URL, progress: ProgressHandler) throws -> URL {
+        let out = Output.file(for: url, ext: "txt", suffix: "OCR")
+        try recognizePDF(url, progress: progress).write(to: out, atomically: true, encoding: .utf8)
+        return out
+    }
+
+    /// Reads every page of a PDF with OCR, pages separated by blank lines.
+    static func recognizePDF(_ url: URL, progress: ProgressHandler = { _ in }) throws -> String {
         let doc = try PDFOps.open(url)
         var pages: [String] = []
         for i in 0..<doc.pageCount {
@@ -53,8 +60,6 @@ enum VisionOps {
             }
             progress(Double(i + 1) / Double(doc.pageCount))
         }
-        let out = Output.file(for: url, ext: "txt", suffix: "OCR")
-        try pages.joined(separator: "\n\n").write(to: out, atomically: true, encoding: .utf8)
-        return out
+        return pages.joined(separator: "\n\n")
     }
 }
