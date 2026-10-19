@@ -35,7 +35,8 @@ jobs:
         run: scripts/make-dmg.sh
       - name: Write release notes from commit messages since the previous tag
         run: |
-          # Prefer hand-written notes in an annotated tag (git tag -a vX.Y.Z -F notes.md);
+          # Prefer hand-written notes in an annotated tag (git tag -a vX.Y.Z --cleanup=verbatim -F notes.md,
+          # so Markdown headings starting with # survive);
           # otherwise build them from the commit messages since the previous tag.
           if [ "$(git cat-file -t "$GITHUB_REF_NAME")" = "tag" ]; then
             git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME" > notes.md
