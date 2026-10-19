@@ -57,7 +57,7 @@ if let command = arguments.first, command.hasPrefix("--") {
             shelf.discardStaging()
             exit(ok ? 0 : 1)
         case "--update-test":
-            // KAERU_FAKE_VERSION=0.0.1 Kaeru --update-test — runs the real update pipeline against GitHub
+            // KAERU_FAKE_VERSION=0.0.1 Kaeru --update-test runs the real update pipeline against GitHub
             // (find, download, unpack, verify) without installing anything.
             await Updater.shared.check(interactive: true)
             switch Updater.shared.status {
