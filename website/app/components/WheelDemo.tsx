@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { COLORS, type Category } from "../site";
 
-type Mode = "convert" | "tools" | "actions";
+export type Mode = "convert" | "tools" | "actions";
 type Op = { label: string; hint?: string; ext?: string; category: Category; result: (name: string) => string };
 
 type DemoFile = { id: string; name: string; kind: "photo" | "video" | "doc"; x: number; y: number; fresh?: boolean };
@@ -21,7 +21,7 @@ const ACTIONS: Op[] = [
   action("Reveal", "Shown in Finder"),
 ];
 
-const OPS: Record<DemoFile["kind"], Record<Mode, Op[]>> = {
+export const OPS: Record<DemoFile["kind"], Record<Mode, Op[]>> = {
   photo: {
     convert: [convert("jpg", "image", "Universal"), convert("png", "image", "Lossless"), convert("webp", "image", "Web"),
       convert("avif", "image", "Smallest"), convert("pdf", "pdf", "Document"), convert("tiff", "image"),
@@ -58,7 +58,7 @@ const INITIAL: DemoFile[] = [
 ];
 
 // Same proportions as the app's wheel: rounded tiles on a pale plate.
-const R_IN = 62, R_OUT = 152, R_MID = (R_IN + R_OUT) / 2, RIM = 9, GAP = 7, CORNER = 15;
+export const R_IN = 62, R_OUT = 152, R_MID = (R_IN + R_OUT) / 2, RIM = 9, GAP = 7, CORNER = 15;
 
 function modeFromKey(e: KeyboardEvent): Mode | null {
   if (e.key === "Shift") return "convert";
@@ -332,14 +332,18 @@ function tilePath(i: number, n: number, ro: number) {
     L${s4x},${s4y} Q${iex},${iey} ${s5x},${s5y} A${ri},${ri} 0 ${large} 0 ${s6x},${s6y} Q${isx},${isy} ${s7x},${s7y} Z`;
 }
 
-function Wheel({ x, y, mode, ops, hover, fileName, scale = 1, embedded = false }: {
+export function Wheel({ x, y, mode, ops, hover, fileName, scale = 1, embedded = false, resize = false }: {
   x: number; y: number; mode: Mode; ops: Op[]; hover: number | null; fileName: string; scale?: number; embedded?: boolean;
+  /** Scale by resizing the SVG instead of a CSS transform. Slower, but text is redrawn crisply every frame,
+   *  which the promo recorder needs (Chrome can leave SVG text stale under a changing CSS scale). */
+  resize?: boolean;
 }) {
   const n = Math.max(ops.length, 1);
   const step = (2 * Math.PI) / n;
   const hovered = hover !== null && hover >= 0 ? ops[hover] : null;
   const accent = MODE_COLORS[mode];
   const size = (R_OUT + RIM + 8) * 2;
+  const px = resize ? size * scale : size;
   const pill = hover === -1 ? "Cancel" : hovered ? hovered.label : MODE_TITLES[mode];
   const pillWidth = Math.max(96, pill.length * 9 + 40);
   const uid = useId();
@@ -349,8 +353,9 @@ function Wheel({ x, y, mode, ops, hover, fileName, scale = 1, embedded = false }
 
   return (
     <div className={embedded ? "wheel is-embedded" : "wheel"}
-         style={embedded ? { width: size, height: size } : { left: x, top: y, width: size, height: size, "--scale": scale } as React.CSSProperties}>
-      <svg viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`} width={size} height={size}>
+         style={embedded ? { width: size, height: size }
+           : { left: x, top: y, width: px, height: px, "--scale": resize ? 1 : scale } as React.CSSProperties}>
+      <svg viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`} width={px} height={px}>
         <defs>
           <radialGradient id={`tile-${uid}`} cx="50%" cy="50%" r="60%">
             <stop offset="0%" stopColor="var(--tile-hi)" /><stop offset="100%" stopColor="var(--tile-lo)" />
@@ -398,7 +403,7 @@ export function MiniWheel({ mode, hover }: { mode: Mode; hover: number }) {
   );
 }
 
-function FileIcon({ kind, name }: { kind: DemoFile["kind"]; name: string }) {
+export function FileIcon({ kind, name }: { kind: DemoFile["kind"]; name: string }) {
   const ext = name.split(".").pop()!.toUpperCase();
   if (kind === "photo") {
     return (
