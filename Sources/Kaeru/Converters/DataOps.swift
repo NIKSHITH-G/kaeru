@@ -10,11 +10,36 @@ enum DataOps {
 
     static func tableConvertOps() -> [FileOperation] {
         tableTargets.map { t in
-            .perFile("table.\(t.ext)", t.title, "tablecells", ext: t.ext) { url, _ in
+            t.ext == "pdf" ? tablePDFOp() : .perFile("table.\(t.ext)", t.title, "tablecells", ext: t.ext) { url, _ in
                 let out = Output.file(for: url, ext: t.ext)
                 try await writeTable(try await readTable(url), to: out)
                 return [out]
             }
+        }
+    }
+
+    /// Spreadsheets → PDF go through Excel when it's installed, so the sheet looks exactly as it
+    /// does there. Otherwise, or if Excel can't do it, Kaeru lays the table out itself and says so.
+    private static func tablePDFOp() -> FileOperation {
+        FileOperation(id: "table.pdf", title: "PDF", symbol: "tablecells", targetExt: "pdf") { inputs, progress in
+            var result = OpResult()
+            for (i, url) in inputs.enumerated() {
+                let out = Output.file(for: url, ext: "pdf")
+                var done = false
+                if OfficeApps.hasExcel && ["xlsx", "xls", "xlsm", "ods", "csv"].contains(FileKind.normalizedExt(url.pathExtension)) {
+                    do {
+                        try await OfficeApps.spreadsheetToPDF(url, out)
+                        done = true
+                    } catch {
+                        NSLog("Kaeru: Excel export failed, using the built-in renderer: \(error.localizedDescription)")
+                        result.message = "Made without Excel, so colours and column widths may differ. Allow Kaeru to control Microsoft Excel in System Settings → Privacy & Security → Automation"
+                    }
+                }
+                if !done { try await writeTable(try await readTable(url), to: out) }
+                result.outputs.append(out)
+                progress(Double(i + 1) / Double(inputs.count))
+            }
+            return result
         }
     }
 
@@ -41,7 +66,7 @@ enum DataOps {
             // Written by hand so keys keep the spreadsheet's column order.
             guard let header = rows.first else { throw fail("Table is empty") }
             func quote(_ s: String) -> String {
-                let data = try? JSONSerialization.data(withJSONObject: s, options: .fragmentsAllowed)
+                let data = try? JSONSerialization.data(withJSONObject: s, options: [.fragmentsAllowed, .withoutEscapingSlashes])
                 return data.map { String(decoding: $0, as: UTF8.self) } ?? "\"\""
             }
             func value(_ s: String) -> String { XLSX.isNumber(s) ? s : quote(s) }
@@ -64,8 +89,17 @@ enum DataOps {
         case "html":
             try Markdown.wrap(Markdown.table(rows)).write(to: url, atomically: true, encoding: .utf8)
         case "pdf":
-            let html = Markdown.wrap(Markdown.table(rows))
-            try await MainActor.run { try DocumentOps.renderPDF(try DocumentOps.html(html), to: url) }
+            // Wide tables go landscape; WebKit sizes columns to their content and shrinks to fit.
+            let css = Markdown.css + """
+            body { font-size: 8.5pt; line-height: 1.3; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            table { width: 100%; } th { background: #1f3864; color: white; text-align: left; }
+            td, th { padding: 3px 5px; vertical-align: top; overflow-wrap: break-word; word-break: normal; hyphens: none; }
+            tr:nth-child(even) td { background: #f4f6fa; } tr { break-inside: avoid; }
+            thead { display: table-header-group; }
+            """
+            let html = "<!doctype html><html><head><meta charset=\"utf-8\"><style>\(css)</style></head><body>\(Markdown.table(rows))</body></html>"
+            let wide = (rows.map(\.count).max() ?? 0) > 5
+            try await WebPDF.render(html: html, to: url, landscape: wide)
         default: throw fail("Can't write .\(url.pathExtension) tables")
         }
     }
@@ -139,7 +173,7 @@ enum DataOps {
         case let s as String: return s
         case let n as NSNumber: return n.stringValue
         case let v?:
-            let data = try? JSONSerialization.data(withJSONObject: v, options: [.fragmentsAllowed, .sortedKeys])
+            let data = try? JSONSerialization.data(withJSONObject: v, options: [.fragmentsAllowed, .sortedKeys, .withoutEscapingSlashes])
             return data.map { String(decoding: $0, as: UTF8.self) } ?? "\(v)"
         }
     }
@@ -167,7 +201,7 @@ enum DataOps {
         [.perFile("plist.json", "JSON", "curlybraces", ext: "json") { url, _ in
             let obj = try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil)
             let out = Output.file(for: url, ext: "json")
-            try JSONSerialization.data(withJSONObject: jsonSafe(obj), options: [.prettyPrinted, .sortedKeys]).write(to: out)
+            try JSONSerialization.data(withJSONObject: jsonSafe(obj), options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]).write(to: out)
             return [out]
         }]
     }

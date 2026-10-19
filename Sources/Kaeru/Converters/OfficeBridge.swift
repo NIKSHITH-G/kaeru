@@ -13,6 +13,7 @@ enum OfficeApps {
 
     static var hasPowerPoint: Bool { isInstalled("com.microsoft.Powerpoint") }
     static var hasWord: Bool { isInstalled("com.microsoft.Word") }
+    static var hasExcel: Bool { isInstalled("com.microsoft.Excel") }
     static var hasKeynote: Bool { isInstalled("com.apple.iWork.Keynote") }
     static var hasPages: Bool { isInstalled("com.apple.iWork.Pages") }
 
@@ -27,15 +28,17 @@ enum OfficeApps {
                     tell application "Microsoft PowerPoint"
                         open POSIX file (item 1 of argv)
                         set pres to missing value
-                        repeat 480 times
+                        repeat with i from 1 to 480
                             try
                                 set names to name of every presentation
-                                repeat with i from 1 to count of names
-                                    if item i of names is (item 3 of argv) then set pres to presentation i
+                                repeat with j from 1 to count of names
+                                    if item j of names is (item 3 of argv) then set pres to presentation j
                                 end repeat
                             end try
                             if pres is not missing value then exit repeat
                             delay 0.25
+                            -- An app that was still quitting can drop the open request; ask again.
+                            if i mod 40 is 0 then open POSIX file (item 1 of argv)
                         end repeat
                         if pres is missing value then error "PowerPoint didn't open the file"
                         save pres in POSIX file (item 2 of argv) as save as PDF
@@ -63,6 +66,15 @@ enum OfficeApps {
 
     /// Exports a Word, RTF or ODT document to PDF with Microsoft Word, keeping images, tables and styles.
     static func documentToPDF(_ input: URL, _ output: URL) async throws {
+        try await wordExport(input, output, format: "format PDF")
+    }
+
+    /// Saves a document as RTF with Microsoft Word, so tables and pictures survive.
+    static func documentToRTF(_ input: URL, _ output: URL) async throws {
+        try await wordExport(input, output, format: "format RTF")
+    }
+
+    private static func wordExport(_ input: URL, _ output: URL, format: String) async throws {
         guard hasWord else { throw fail("Microsoft Word isn't installed") }
         try await viaLockName(output) { tmp in
             // `open` returns before the document has loaded, so wait for it by name before saving.
@@ -72,20 +84,72 @@ enum OfficeApps {
                 tell application "Microsoft Word"
                     open POSIX file (item 1 of argv)
                     set doc to missing value
-                    repeat 480 times
+                    repeat with i from 1 to 480
                         try
                             set names to name of every document
-                            repeat with i from 1 to count of names
-                                if item i of names is (item 3 of argv) then set doc to document i
+                            repeat with j from 1 to count of names
+                                if item j of names is (item 3 of argv) then set doc to document j
                             end repeat
                         end try
                         if doc is not missing value then exit repeat
                         delay 0.25
+                        -- An app that was still quitting can drop the open request; ask again.
+                        if i mod 40 is 0 then open POSIX file (item 1 of argv)
                     end repeat
                     if doc is missing value then error "Word didn't open the document"
-                    save as doc file name (item 2 of argv) file format format PDF
-                    close doc saving no
+                    save as doc file name (item 2 of argv) file format \(format)
+                    -- Saving as anything but PDF renames the open document to the new file.
+                    try
+                        close doc saving no
+                    on error
+                        close document (item 4 of argv) saving no
+                    end try
                     if not wasRunning and (count of documents) is 0 then quit
+                end tell
+            end run
+            """, input.path, tmp.path, input.lastPathComponent, tmp.lastPathComponent)
+        }
+    }
+
+    /// Exports every sheet of a spreadsheet to PDF with Microsoft Excel, keeping fills, fonts and
+    /// borders. Each sheet is scaled to one page wide so columns never spill onto extra pages.
+    static func spreadsheetToPDF(_ input: URL, _ output: URL) async throws {
+        guard hasExcel else { throw fail("Microsoft Excel isn't installed") }
+        try await viaLockName(output) { tmp in
+            try await run("""
+            on run argv
+                set wasRunning to application "Microsoft Excel" is running
+                tell application "Microsoft Excel"
+                    open POSIX file (item 1 of argv)
+                    set wb to missing value
+                    repeat with i from 1 to 480
+                        try
+                            set names to name of every workbook
+                            repeat with j from 1 to count of names
+                                if item j of names is (item 3 of argv) then set wb to workbook j
+                            end repeat
+                        end try
+                        if wb is not missing value then exit repeat
+                        delay 0.25
+                        -- An app that was still quitting can drop the open request; ask again.
+                        if i mod 40 is 0 then open POSIX file (item 1 of argv)
+                    end repeat
+                    if wb is missing value then error "Excel didn't open the file"
+                    repeat with i from 1 to count of worksheets of wb
+                        -- Page setup needs a printer for some settings; skip whatever Excel refuses.
+                        try
+                            set ps to page setup object of worksheet i of wb
+                            set zoom of ps to false
+                            set fit to pages wide of ps to 1
+                            set fit to pages tall of ps to 999
+                        end try
+                        try
+                            set orientation of ps to landscape
+                        end try
+                    end repeat
+                    save workbook as wb filename (item 2 of argv) file format PDF file format
+                    close wb saving no
+                    if not wasRunning and (count of workbooks) is 0 then quit
                 end tell
             end run
             """, input.path, tmp.path, input.lastPathComponent)
@@ -99,9 +163,10 @@ enum OfficeApps {
     private static func viaLockName(_ output: URL, _ export: (URL) async throws -> Void) async throws {
         let dir = try Output.tempDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let tmp = dir.appendingPathComponent("~$kaeru.pdf")
+        let tmp = dir.appendingPathComponent("~$kaeru." + output.pathExtension)
         try await export(tmp)
-        try requirePDF(tmp)
+        if output.pathExtension.lowercased() == "pdf" { try requirePDF(tmp) }
+        guard FileManager.default.fileExists(atPath: tmp.path) else { throw fail("The app didn't save the file") }
         try? FileManager.default.removeItem(at: output)
         try FileManager.default.moveItem(at: tmp, to: output)
     }
@@ -247,6 +312,73 @@ enum QuickLookOffice {
             if let cg = snapshot.cgImage(forProposedRect: nil, context: nil, hints: nil) { images.append(cg) }
         }
         return images
+    }
+}
+
+/// Lays HTML out with WebKit and prints it to a paginated PDF. Tables get real column widths here,
+/// unlike the text system, which splits them into equal narrow columns.
+enum WebPDF {
+    /// Prints an HTML file, so its own pictures and stylesheets load from beside it.
+    @MainActor
+    static func render(file: URL, to url: URL) async throws {
+        try await render(to: url, landscape: false) { $0.loadFileURL(file, allowingReadAccessTo: file.deletingLastPathComponent()) }
+    }
+
+    @MainActor
+    static func render(html: String, to url: URL, landscape: Bool) async throws {
+        try await render(to: url, landscape: landscape) { $0.loadHTMLString(html, baseURL: nil) }
+    }
+
+    @MainActor
+    private static func render(to url: URL, landscape: Bool, load: (WKWebView) -> Void) async throws {
+        let info = NSPrintInfo(dictionary: [.jobSavingURL: url])
+        info.jobDisposition = .save
+        info.paperSize = NSPrintInfo.shared.paperSize
+        info.orientation = landscape ? .landscape : .portrait
+        info.topMargin = 36; info.bottomMargin = 36; info.leftMargin = 36; info.rightMargin = 36
+        info.horizontalPagination = .fit
+        info.verticalPagination = .automatic
+        let size = info.paperSize
+        let width = (landscape ? max(size.width, size.height) : min(size.width, size.height)) - 72
+
+        // Printing drops background colours by default, which turns white-on-navy headers invisible.
+        let config = WKWebViewConfiguration()
+        config.userContentController.addUserScript(WKUserScript(source: """
+            const s = document.createElement('style');
+            s.textContent = '* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }';
+            document.documentElement.appendChild(s);
+            """, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        let web = WKWebView(frame: NSRect(x: 0, y: 0, width: width, height: 800), configuration: config)
+        let window = NSWindow(contentRect: NSRect(x: -30_000, y: -30_000, width: width, height: 800),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = web
+        window.orderBack(nil)
+        defer { window.orderOut(nil) }
+        let loader = PageLoader()
+        web.navigationDelegate = loader
+        load(web)
+        try await loader.wait()
+
+        let op = web.printOperation(with: info)
+        op.showsPrintPanel = false
+        op.showsProgressPanel = false
+        op.view?.frame = web.bounds
+        // WebKit prints asynchronously; the blocking `run()` never returns for a WKWebView.
+        let done = PrintDone()
+        let ok = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
+            done.continuation = c
+            op.runModal(for: window, delegate: done,
+                        didRun: #selector(PrintDone.printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
+        }
+        guard ok else { throw fail("Couldn't render PDF") }
+    }
+}
+
+private final class PrintDone: NSObject {
+    var continuation: CheckedContinuation<Bool, Never>?
+    @objc func printOperationDidRun(_ op: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?) {
+        continuation?.resume(returning: success)
+        continuation = nil
     }
 }
 

@@ -11,7 +11,8 @@ enum DocumentOps {
         var list = targets + [(ext: "epub", title: "EPUB")]
         if OfficeApps.hasPages { list.append((ext: "pages", title: "Pages")) }
         return list.map { t in
-            t.ext == "pdf" ? pdfOp() : .perFile("doc.\(t.ext)", t.title, "doc.text", ext: t.ext) { url, _ in
+            t.ext == "pdf" ? viaWordOp("pdf", "PDF", OfficeApps.documentToPDF)
+                : t.ext == "rtf" ? viaWordOp("rtf", "RTF", OfficeApps.documentToRTF) : .perFile("doc.\(t.ext)", t.title, "doc.text", ext: t.ext) { url, _ in
                 let out = Output.file(for: url, ext: t.ext)
                 switch t.ext {
                 case "epub":
@@ -28,24 +29,27 @@ enum DocumentOps {
         }
     }
 
-    /// DOCX → PDF goes through Word when it's installed, so the layout, images and styles match
-    /// exactly. If Word can't do it, the built-in engine makes a simpler PDF and says so.
-    private static func pdfOp() -> FileOperation {
-        FileOperation(id: "doc.pdf", title: "PDF", symbol: "doc.text", targetExt: "pdf") { inputs, progress in
+    /// PDF and RTF go through Word when it's installed, so the layout, pictures, tables and styles
+    /// match exactly. If Word can't do it, the built-in engine makes a simpler file and says so.
+    private static func viaWordOp(_ ext: String, _ title: String,
+                                  _ export: @escaping (URL, URL) async throws -> Void) -> FileOperation {
+        FileOperation(id: "doc.\(ext)", title: title, symbol: "doc.text", targetExt: ext) { inputs, progress in
             var result = OpResult()
             for (i, url) in inputs.enumerated() {
-                let out = Output.file(for: url, ext: "pdf")
+                let out = Output.file(for: url, ext: ext)
                 var done = false
                 if OfficeApps.hasWord && ["docx", "doc", "rtf", "odt"].contains(FileKind.normalizedExt(url.pathExtension)) {
                     do {
-                        try await OfficeApps.documentToPDF(url, out)
+                        try await export(url, out)
                         done = true
                     } catch {
                         NSLog("Kaeru: Word export failed, using the built-in renderer: \(error.localizedDescription)")
                         result.message = "Made without Word, so some pictures and styles may differ. Allow Kaeru to control Microsoft Word in System Settings → Privacy & Security → Automation"
                     }
                 }
-                if !done {
+                if !done && ext == "pdf" {
+                    try await webPDF(url, out)
+                } else if !done {
                     let text = try await load(url)
                     try await MainActor.run { try write(text, to: out) }
                 }
@@ -54,6 +58,39 @@ enum DocumentOps {
             }
             return result
         }
+    }
+
+    /// Lays a document out with WebKit, which sizes table columns to their content and keeps an
+    /// HTML file's own pictures and styles; the text system squeezes tables into equal columns.
+    private static func webPDF(_ url: URL, _ out: URL) async throws {
+        switch FileKind.normalizedExt(url.pathExtension) {
+        case "html", "htm":
+            try await WebPDF.render(file: url, to: out)
+        case "md":
+            let html = Markdown.toHTML(try String(contentsOf: url, encoding: .utf8))
+            try await WebPDF.render(html: html, to: out, landscape: false)
+        default:
+            let text = try await load(url)
+            let html = try await MainActor.run { () throws -> String in
+                let text = readableOnWhite(text)
+                let data = try text.data(from: NSRange(location: 0, length: text.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.html])
+                return String(decoding: data, as: UTF8.self)
+            }
+            try await WebPDF.render(html: html, to: out, landscape: false)
+        }
+    }
+
+    /// The system DOCX reader drops table cell shading, which leaves white header text on a white
+    /// page. Text that is nearly white and has no background of its own is made dark instead.
+    private static func readableOnWhite(_ text: NSAttributedString) -> NSAttributedString {
+        let out = NSMutableAttributedString(attributedString: text)
+        text.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: text.length)) { value, range, _ in
+            guard let color = (value as? NSColor)?.usingColorSpace(.sRGB),
+                  color.redComponent > 0.85, color.greenComponent > 0.85, color.blueComponent > 0.85,
+                  text.attribute(.backgroundColor, at: range.location, effectiveRange: nil) == nil else { return }
+            out.addAttribute(.foregroundColor, value: NSColor.black, range: range)
+        }
+        return out
     }
 
     /// Reads any supported document, including EPUB, as attributed text.

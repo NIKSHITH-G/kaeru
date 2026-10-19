@@ -165,7 +165,8 @@ enum Markdown {
 
             if size >= base * 1.6 { blocks.append(("# " + plain, false)); return }
             if size >= base * 1.3 { blocks.append(("## " + plain, false)); return }
-            if size >= base * 1.12 && bold { blocks.append(("### " + plain, false)); return }
+            if size >= base * 1.12 && (bold || plain.count <= 80) { blocks.append(("### " + plain, false)); return }
+            if size > base * 1.03 && plain.count <= 80 && plain.last != "." { blocks.append(("#### " + plain, false)); return }
 
             // Lists arrive either as real text lists or, from DOCX and PDF, as literal "•⇥" / "1⇥" markers.
             let bulletMarker = "^\\s*[•◦▪‣⁃–]\\s+", numberMarker = "^\\s*\\d+([.)]\\s+|\\t\\s*|\\s(?=\\S))"
@@ -180,7 +181,9 @@ enum Markdown {
                 blocks.append(((ordered ? "1. " : "- ") + body, true))
                 return
             }
-            blocks.append((inlineMarkdown(para), false))
+            // Text that happens to start with "#" (a "#" column, a hashtag) must not become a heading.
+            let line = inlineMarkdown(para)
+            blocks.append((line.hasPrefix("#") ? "\\" + line : line, false))
         }
 
         flushTable()
@@ -208,7 +211,10 @@ enum Markdown {
         text.enumerateAttribute(.font, in: NSRange(location: 0, length: text.length)) { value, range, _ in
             if let f = value as? NSFont { weights[f.pointSize.rounded(), default: 0] += range.length }
         }
-        return weights.max { $0.value < $1.value }?.key ?? 12
+        // Tables and footnotes in small type can outweigh the body, so take the largest size that is
+        // still common (at least 40% of the most used one) rather than simply the most used.
+        guard let top = weights.values.max() else { return 12 }
+        return weights.filter { Double($0.value) >= Double(top) * 0.4 }.keys.max() ?? 12
     }
 
     private static func isEntirely(_ text: NSAttributedString, trait: NSFontDescriptor.SymbolicTraits) -> Bool {

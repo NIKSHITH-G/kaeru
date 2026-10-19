@@ -155,13 +155,40 @@ enum PDFOps {
         return folder.map { [$0] } ?? []
     }
 
+    /// PDFs store each printed line separately. Rejoins lines that continue the same sentence in the
+    /// same type size, so paragraphs and long headings come out whole.
+    static func joiningWrappedLines(_ text: NSAttributedString) -> NSAttributedString {
+        let out = NSMutableAttributedString(attributedString: text)
+        let ns = text.string as NSString
+        let lines = ns.components(separatedBy: "\n")
+        func size(at i: Int) -> CGFloat {
+            guard i >= 0, i < text.length else { return 0 }
+            return ((text.attribute(.font, at: i, effectiveRange: nil) as? NSFont)?.pointSize ?? 0).rounded()
+        }
+        var offset = 0
+        var joins: [Int] = []
+        for (n, line) in lines.enumerated() where n + 1 < lines.count {
+            let len = (line as NSString).length
+            let newline = offset + len
+            offset = newline + 1
+            let current = line.trimmingCharacters(in: .whitespaces)
+            let next = lines[n + 1].trimmingCharacters(in: .whitespaces)
+            guard let last = current.last, let first = next.first, len > 0,
+                  size(at: newline - 1) == size(at: newline + 1) else { continue }
+            let ends = ".!?:;".contains(last)
+            if !ends && first.isLowercase { joins.append(newline) }
+        }
+        for i in joins.reversed() { out.replaceCharacters(in: NSRange(location: i, length: 1), with: " ") }
+        return out
+    }
+
     static func attributedText(_ url: URL) throws -> NSAttributedString {
         let doc = try open(url)
         let result = NSMutableAttributedString()
         for i in 0..<doc.pageCount {
             if let text = doc.page(at: i)?.attributedString {
                 if result.length > 0 { result.append(NSAttributedString(string: "\n\n")) }
-                result.append(text)
+                result.append(joiningWrappedLines(text))
             }
         }
         guard result.length > 0 else { throw fail("\(url.lastPathComponent) has no text layer. Try Tools → Extract Text") }
