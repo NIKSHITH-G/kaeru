@@ -1,26 +1,36 @@
 import Image from "next/image";
-import WheelDemo from "./components/WheelDemo";
-import { COLORS, DOWNLOAD_URL, FORMAT_GROUPS, GITHUB_URL, RELEASES_URL, latestRelease } from "./site";
+import { CornerDownLeft, Download, Gauge, Keyboard, MousePointerClick, RefreshCw, Scissors, Sparkles } from "lucide-react";
+import { CopyCommand, PlatformNote } from "./components/Bits";
+import WheelDemo, { MiniWheel } from "./components/WheelDemo";
+import { COLORS, DOWNLOAD_URL, FORMAT_GROUPS, GITHUB_URL, RELEASES_URL, latestRelease, recentReleases } from "./site";
+
+function GitHubMark({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden fill="currentColor">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}
 
 const WHEELS = [
-  { key: "⇧", name: "Convert", color: COLORS.brand,
+  { key: "⇧", name: "Convert", color: COLORS.brand, mode: "convert" as const, hover: 0,
     body: "Every format your file can become, in one ring. HEIC → JPG, MOV → MP4, DOCX → PDF, PDF → PPTX.",
     chips: ["JPG", "MP4", "PDF", "WebP", "MP3", "XLSX", "EPUB"] },
-  { key: "⌘", name: "Tools", color: COLORS.tool,
+  { key: "⌘", name: "Tools", color: COLORS.tool, mode: "tools" as const, hover: 1,
     body: "Edit without an editor: trim and crop, compress, merge clips, remove backgrounds, pull text out of images.",
     chips: ["Trim", "Crop", "Compress", "Remove BG", "OCR", "Merge"] },
-  { key: "⌃", name: "Actions", color: COLORS.action,
+  { key: "⌃", name: "Actions", color: COLORS.action, mode: "actions" as const, hover: 0,
     body: "Things you do with files: AirDrop them, float them above every window, copy the path, open Terminal there.",
     chips: ["AirDrop", "Float", "Copy Path", "Move To", "Terminal"] },
 ];
 
 const FEATURES = [
-  { icon: "↩", title: "Return in Finder", body: "Select files and press Return — the wheel opens, no drag needed. Renaming still works." },
-  { icon: "✂︎", title: "Trim & crop built in", body: "A QuickTime-style trimmer and a crop tool with aspect presets, opened right from the wheel." },
-  { icon: "✦", title: "On-device AI", body: "Remove backgrounds, recognise text and make scanned PDFs searchable — with Apple's Vision, offline." },
-  { icon: "◔", title: "See what's happening", body: "Live progress, one-click cancel, and a record of how much space compression saved." },
-  { icon: "⟳", title: "Updates itself", body: "New versions install from inside the app. No App Store, no account." },
-  { icon: "⌘", title: "Your keys, your way", body: "Pick Shift, ⌘, ⌃, ⌥, fn or Tab for each wheel. Keyboard-only control with arrows and Return." },
+  { icon: CornerDownLeft, title: "Return in Finder", body: "Select files and press Return — the wheel opens, no drag needed. Renaming still works." },
+  { icon: Scissors, title: "Trim & crop built in", body: "A QuickTime-style trimmer and a crop tool with aspect presets, opened right from the wheel." },
+  { icon: Sparkles, title: "On-device AI", body: "Remove backgrounds, recognise text and make scanned PDFs searchable — with Apple's Vision, offline." },
+  { icon: Gauge, title: "See what's happening", body: "Live progress, one-click cancel, and a record of how much space compression saved." },
+  { icon: RefreshCw, title: "Updates itself", body: "New versions install from inside the app. No App Store, no account." },
+  { icon: Keyboard, title: "Your keys, your way", body: "Pick Shift, ⌘, ⌃, ⌥, fn or Tab for each wheel. Keyboard-only control with arrows and Return." },
 ];
 
 const COMPARE: [string, string, string][] = [
@@ -42,18 +52,35 @@ const FAQ = [
 ];
 
 export default async function Home() {
-  const release = await latestRelease();
+  const [release, releases] = await Promise.all([latestRelease(), recentReleases(3)]);
   const totalConversions = 351;
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "Kaeru",
+            applicationCategory: "UtilitiesApplication",
+            operatingSystem: "macOS 13 or later",
+            offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+            downloadUrl: DOWNLOAD_URL,
+            softwareVersion: release.version || undefined,
+            description: "Drag a file, hold a key, drop it on what you want. 350+ private, on-device conversions for macOS.",
+          }),
+        }}
+      />
       <header className="nav">
         <a href="#" className="brand"><Image src="/shots/icon.png" alt="" width={30} height={30} priority />Kaeru</a>
         <nav>
           <a href="#how">How it works</a>
           <a href="#formats">Formats</a>
+          <a href="#install">Install</a>
           <a href="#faq">FAQ</a>
-          <a href={GITHUB_URL} className="nav-gh">GitHub</a>
+          <a href={GITHUB_URL} className="nav-gh" aria-label="GitHub"><GitHubMark size={18} /></a>
           <a href={DOWNLOAD_URL} className="btn btn-small">Download</a>
         </nav>
       </header>
@@ -71,13 +98,14 @@ export default async function Home() {
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path fill="currentColor" d="M8 1v9.6l3.3-3.3 1.4 1.4L8 13.4 3.3 8.7l1.4-1.4L7 10.6V1h2zM2 14h12v2H2z" /></svg>
               Download for macOS
             </a>
-            <a href={GITHUB_URL} className="btn btn-ghost">View source</a>
+            <a href={GITHUB_URL} className="btn btn-ghost"><GitHubMark /> View source</a>
           </div>
           <p className="meta">
             Free · Open source · macOS 13+ · Apple silicon
             {release.version && <> · v{release.version}</>}
             {release.sizeMB && <> · {release.sizeMB} MB</>}
           </p>
+          <PlatformNote />
           <WheelDemo />
         </section>
 
@@ -94,6 +122,7 @@ export default async function Home() {
           <div className="wheels">
             {WHEELS.map((w) => (
               <article key={w.name} className="card wheel-card" style={{ "--accent": w.color } as React.CSSProperties}>
+                <MiniWheel mode={w.mode} hover={w.hover} />
                 <div className="wheel-card-head"><kbd className="kbd-lg">{w.key}</kbd><h3>{w.name}</h3></div>
                 <p>{w.body}</p>
                 <div className="chips">{w.chips.map((c) => <span key={c} className="chip">{c}</span>)}</div>
@@ -107,7 +136,7 @@ export default async function Home() {
           <div className="features">
             {FEATURES.map((f) => (
               <div key={f.title} className="feature">
-                <span className="feature-icon">{f.icon}</span>
+                <span className="feature-icon"><f.icon size={19} strokeWidth={2.2} /></span>
                 <h3>{f.title}</h3>
                 <p>{f.body}</p>
               </div>
@@ -124,6 +153,45 @@ export default async function Home() {
               <Image src="/shots/tutorial.png" alt="The hands-on tutorial" width={1120} height={1056} sizes="(max-width: 900px) 100vw, 35vw" />
             </div>
             <p className="shot-caption"><b>Learn it in 30 seconds.</b> The first-run tutorial hands you a sample file to try the wheel on — and celebrates when you do.</p>
+          </div>
+        </section>
+
+        <section id="install" className="section">
+          <h2>Installed in under a minute</h2>
+          <p className="section-lede">No App Store, no account. Kaeru is free and open source, so the first launch needs one extra click.</p>
+          <ol className="steps">
+            <li className="card step">
+              <span className="step-n">1</span>
+              <div className="step-art step-art-download"><Download size={30} strokeWidth={2} /></div>
+              <h3>Download</h3>
+              <p>Get <b>Kaeru.dmg</b>{release.sizeMB ? ` (${release.sizeMB} MB)` : ""}. FFmpeg is built in, so there&rsquo;s nothing else to install.</p>
+              <a href={DOWNLOAD_URL} className="btn btn-small">Download</a>
+            </li>
+            <li className="card step">
+              <span className="step-n">2</span>
+              <div className="step-art step-art-drag">
+                <Image src="/shots/icon.png" alt="" width={46} height={46} />
+                <span className="step-arrow">→</span>
+                <span className="step-folder">Applications</span>
+              </div>
+              <h3>Drag to Applications</h3>
+              <p>Open the DMG and drag the frog onto the Applications folder.</p>
+            </li>
+            <li className="card step">
+              <span className="step-n">3</span>
+              <div className="step-art step-art-menu">
+                <span className="menu-item">Open</span>
+                <span className="menu-item is-dim">Show Package Contents</span>
+                <span className="menu-item is-dim">Move to Trash</span>
+                <MousePointerClick size={20} className="menu-pointer" />
+              </div>
+              <h3>Right-click → Open</h3>
+              <p>The first time only, right-click Kaeru and choose <b>Open</b>, then <b>Open</b> again. A 30-second tutorial follows.</p>
+            </li>
+          </ol>
+          <div className="install-alt">
+            <span>Prefer Terminal? This clears the first-launch warning instead:</span>
+            <CopyCommand command="xattr -dr com.apple.quarantine /Applications/Kaeru.app" />
           </div>
         </section>
 
@@ -152,6 +220,26 @@ export default async function Home() {
             ))}
           </div>
         </section>
+
+        {releases.length > 0 && (
+          <section className="section">
+            <h2>What&rsquo;s new</h2>
+            <p className="section-lede">Kaeru updates itself. Here&rsquo;s what landed recently.</p>
+            <div className="releases">
+              {releases.map((r, i) => (
+                <a key={r.version} href={r.url} className="card release">
+                  <div className="release-head">
+                    <span className="release-version">v{r.version}</span>
+                    {i === 0 && <span className="release-latest">Latest</span>}
+                    <span className="release-date">{r.date}</span>
+                  </div>
+                  <h3>{r.title}</h3>
+                  <ul>{r.points.slice(0, 3).map((p) => <li key={p}>{p}</li>)}</ul>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section id="faq" className="section faq">
           <h2>Questions</h2>

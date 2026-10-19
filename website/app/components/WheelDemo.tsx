@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { COLORS, type Category } from "../site";
 
 type Mode = "convert" | "tools" | "actions";
@@ -75,6 +75,12 @@ export default function WheelDemo() {
   const [hover, setHover] = useState<number | null>(null);
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [tried, setTried] = useState(false);
+  // The replay runs until the visitor touches the demo; then it's theirs.
+  const [auto, setAuto] = useState(true);
+  const [cursor, setCursor] = useState<{ x: number; y: number; down: boolean } | null>(null);
+  const [pressed, setPressed] = useState<Mode | null>(null);
+  const [scale, setScale] = useState(1);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const still = useRef<{ timer: ReturnType<typeof setTimeout> | null; x: number; y: number }>({ timer: null, x: 0, y: 0 });
 
   const ops = drag && wheel ? OPS[drag.file.kind][wheel.mode] : [];
@@ -85,12 +91,23 @@ export default function WheelDemo() {
   }, []);
 
   const sliceAt = useCallback((x: number, y: number, w: { x: number; y: number }, count: number) => {
-    const dx = x - w.x, dy = y - w.y, r = Math.hypot(dx, dy);
+    const dx = (x - w.x) / scale, dy = (y - w.y) / scale, r = Math.hypot(dx, dy);
     if (r < R_IN) return -1;
     if (r > R_OUT + 20 || count === 0) return null;
     let theta = Math.atan2(dx, -dy);           // clockwise from 12 o'clock
     if (theta < 0) theta += 2 * Math.PI;
     return Math.min(Math.floor(theta / ((2 * Math.PI) / count)), count - 1);
+  }, [scale]);
+
+  // Shrink the wheel on narrow screens so it always fits the stage.
+  useEffect(() => {
+    const fit = () => {
+      const w = stage.current?.clientWidth ?? 1000;
+      setScale(Math.min(1, (w - 16) / ((R_OUT + RIM + 12) * 2)));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
   }, []);
 
   // The latest drag position, readable from timers and key handlers without stale closures.
@@ -107,15 +124,72 @@ export default function WheelDemo() {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       const mode = modeFromKey(e);
-      if (mode && drag) { e.preventDefault(); openWheel(mode); }
+      if (mode && drag && !auto) { e.preventDefault(); openWheel(mode); setPressed(mode); }
       if (e.key === "Escape") { setWheel(null); setDrag(null); }
     };
     window.addEventListener("keydown", down);
     return () => window.removeEventListener("keydown", down);
-  }, [drag, openWheel]);
+  }, [drag, openWheel, auto]);
+
+  /** Drops `file` on `op`: shows the result and, for conversions, puts the new file on the desktop. */
+  const complete = useCallback((file: DemoFile, op: Op, byVisitor: boolean) => {
+    const text = op.result(file.name);
+    setToast({ text, ok: true });
+    if (byVisitor) setTried(true);
+    if (op.category === "action" || text.includes("words")) return;
+    const name = text.split(" · ")[0];
+    const kind: DemoFile["kind"] = /\.(mp4|mov|mkv|webm)$/.test(name) ? "video"
+      : /\.(jpg|png|webp|avif|tiff|gif|ico|heic)$/.test(name) ? "photo" : "doc";
+    setFiles((fs) => [...fs.slice(-5), {
+      id: Math.random().toString(36).slice(2), name, kind, fresh: true,
+      x: Math.min(0.82, Math.max(0.18, file.x + 0.2 * (file.x > 0.5 ? -1 : 1))),
+      y: Math.min(0.78, file.y + 0.12 * fs.filter((f) => f.fresh).length + 0.02),
+    }]);
+  }, []);
+
+  /** Ends the replay and clears its leftovers; only called while the replay is running. */
+  const stopReplay = useCallback(() => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    setAuto(false);
+    setCursor(null); setWheel(null); setHover(null); setPressed(null); setToast(null); setFiles(INITIAL);
+  }, []);
+
+  // The replay: a cursor picks up the photo, presses ⇧, and drops it on JPG. Loops until touched.
+  useEffect(() => {
+    if (!auto || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const at = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
+    const run = () => {
+      const el = stage.current;
+      if (!el) return;
+      const W = el.clientWidth, H = el.clientHeight;
+      const file = INITIAL[0];
+      const start = { x: W * 0.55, y: H * 0.95 }, pick = { x: file.x * W, y: file.y * H };
+      const centre = { x: W * 0.5, y: H * 0.5 };
+      const jpg = { x: centre.x + 4, y: centre.y - R_MID * scale };
+      setFiles(INITIAL); setToast(null);
+      setCursor({ ...start, down: false });
+      at(250, () => setCursor({ ...pick, down: false }));
+      at(1150, () => { setCursor({ ...pick, down: true }); setDrag({ file, ...pick }); });
+      at(1350, () => { setCursor({ ...centre, down: true }); setDrag({ file, ...centre }); });
+      at(2250, () => { setPressed("convert"); setWheel({ ...centre, mode: "convert" }); });
+      at(2850, () => { setCursor({ ...jpg, down: true }); setDrag({ file, ...jpg }); });
+      at(3500, () => setHover(0));
+      at(4400, () => {
+        complete(file, OPS.photo.convert[0], false);
+        setCursor({ ...jpg, down: false }); setPressed(null); setDrag(null); setWheel(null); setHover(null);
+      });
+      at(5000, () => setCursor(null));
+      at(8000, run);
+    };
+    at(900, run);
+    const pending = timers.current;
+    return () => { pending.forEach(clearTimeout); };
+  }, [auto, scale, complete]);
 
   const onPointerDown = (file: DemoFile) => (e: React.PointerEvent) => {
     e.preventDefault();
+    if (auto) stopReplay();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     const p = local(e.clientX, e.clientY);
     const next = { file, ...p };
@@ -132,7 +206,7 @@ export default function WheelDemo() {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!drag) return;
+    if (!drag || auto) return;
     const p = local(e.clientX, e.clientY);
     const next = { ...drag, ...p };
     dragRef.current = next;
@@ -145,33 +219,20 @@ export default function WheelDemo() {
   };
 
   const onPointerUp = () => {
+    if (auto) return;
     if (still.current.timer) clearTimeout(still.current.timer);
-    if (drag && wheel && hover !== null && hover >= 0 && ops[hover]) {
-      const op = ops[hover];
-      const text = op.result(drag.file.name);
-      setToast({ text, ok: true });
-      setTried(true);
-      if (op.category !== "action" && !text.includes("words")) {
-        const name = text.split(" · ")[0];
-        const kind: DemoFile["kind"] = /\.(mp4|mov|mkv|webm|gif)$/.test(name) && !name.endsWith(".gif") ? "video"
-          : /\.(jpg|png|webp|avif|tiff|gif|ico|heic)$/.test(name) ? "photo" : "doc";
-        setFiles((fs) => [...fs.slice(-5), {
-          id: Math.random().toString(36).slice(2), name, kind, fresh: true,
-          x: Math.min(0.82, Math.max(0.18, drag.file.x + 0.2 * (drag.file.x > 0.5 ? -1 : 1))),
-          y: Math.min(0.78, drag.file.y + 0.12 * fs.filter((f) => f.fresh).length + 0.02),
-        }]);
-      }
-    }
+    if (drag && wheel && hover !== null && hover >= 0 && ops[hover]) complete(drag.file, ops[hover], true);
     setDrag(null);
     setWheel(null);
     setHover(null);
+    setPressed(null);
   };
 
   return (
     <div className="demo">
       <div
         ref={stage}
-        className="demo-stage"
+        className={`demo-stage ${auto ? "is-auto" : ""}`}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
@@ -202,10 +263,29 @@ export default function WheelDemo() {
         )}
 
         {drag && wheel && (
-          <Wheel x={wheel.x} y={wheel.y} mode={wheel.mode} ops={ops} hover={hover} fileName={drag.file.name} />
+          <Wheel x={wheel.x} y={wheel.y} mode={wheel.mode} ops={ops} hover={hover} fileName={drag.file.name} scale={scale} />
         )}
 
-        {!drag && !tried && (
+        {pressed && wheel && (
+          <div className="demo-key" style={{ left: wheel.x, top: wheel.y - (R_OUT + RIM) * scale - 46 }}>
+            <kbd>{MODE_KEYS[pressed]}</kbd> {pressed === "convert" ? "Shift" : pressed === "tools" ? "Command" : "Control"}
+          </div>
+        )}
+
+        {cursor && (
+          <svg className={`demo-cursor ${cursor.down ? "is-down" : ""}`} style={{ left: cursor.x, top: cursor.y }}
+               width="22" height="28" viewBox="0 0 22 28" aria-hidden>
+            <path d="M2 2 L2 22 L7.5 17 L11 25.5 L14.5 24 L11 15.8 L18.5 15.8 Z" fill="#111" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+          </svg>
+        )}
+
+        {auto && !wheel && (
+          <button className="demo-hint is-replay" onClick={stopReplay}>
+            <b>Watching a replay.</b> Grab any file to try it yourself
+          </button>
+        )}
+
+        {!auto && !drag && !tried && (
           <div className="demo-hint">
             <b>Try it:</b> drag a file, then press <kbd>⇧</kbd> <kbd>⌘</kbd> or <kbd>⌃</kbd>
             <span className="demo-hint-touch"> — on touch, pause while dragging</span>
@@ -220,7 +300,7 @@ export default function WheelDemo() {
         )}
       </div>
       <p className="demo-caption">
-        This is a live demo of Kaeru&rsquo;s wheel. On your Mac it works on real files, anywhere.
+        A live, in-browser demo of Kaeru&rsquo;s wheel. On your Mac it works on real files, from anywhere.
       </p>
     </div>
   );
@@ -252,8 +332,8 @@ function tilePath(i: number, n: number, ro: number) {
     L${s4x},${s4y} Q${iex},${iey} ${s5x},${s5y} A${ri},${ri} 0 ${large} 0 ${s6x},${s6y} Q${isx},${isy} ${s7x},${s7y} Z`;
 }
 
-function Wheel({ x, y, mode, ops, hover, fileName }: {
-  x: number; y: number; mode: Mode; ops: Op[]; hover: number | null; fileName: string;
+function Wheel({ x, y, mode, ops, hover, fileName, scale = 1, embedded = false }: {
+  x: number; y: number; mode: Mode; ops: Op[]; hover: number | null; fileName: string; scale?: number; embedded?: boolean;
 }) {
   const n = Math.max(ops.length, 1);
   const step = (2 * Math.PI) / n;
@@ -262,29 +342,31 @@ function Wheel({ x, y, mode, ops, hover, fileName }: {
   const size = (R_OUT + RIM + 8) * 2;
   const pill = hover === -1 ? "Cancel" : hovered ? hovered.label : MODE_TITLES[mode];
   const pillWidth = Math.max(96, pill.length * 9 + 40);
+  const uid = useId();
   const caption = hover === -1 ? "Drop here to cancel"
     : hovered?.ext ? `Convert ${fileName} to ${hovered.label}${HINTS[hovered.ext] ? ` · ${HINTS[hovered.ext]}` : ""}`
     : hovered ? `${hovered.label} · ${fileName}` : fileName;
 
   return (
-    <div className="wheel" style={{ left: x, top: y, width: size, height: size }}>
+    <div className={embedded ? "wheel is-embedded" : "wheel"}
+         style={embedded ? { width: size, height: size } : { left: x, top: y, width: size, height: size, "--scale": scale } as React.CSSProperties}>
       <svg viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`} width={size} height={size}>
         <defs>
-          <radialGradient id="tile-light" cx="50%" cy="50%" r="60%">
+          <radialGradient id={`tile-${uid}`} cx="50%" cy="50%" r="60%">
             <stop offset="0%" stopColor="var(--tile-hi)" /><stop offset="100%" stopColor="var(--tile-lo)" />
           </radialGradient>
-          <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`plate-${uid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--plate-hi)" /><stop offset="100%" stopColor="var(--plate-lo)" />
           </linearGradient>
         </defs>
-        <circle r={R_OUT + RIM} fill="url(#plate)" className="wheel-plate" />
+        <circle r={R_OUT + RIM} fill={`url(#plate-${uid})`} className="wheel-plate" />
         {ops.map((op, i) => {
           const on = i === hover;
           const a = (i + 0.5) * step;
           const lx = Math.sin(a) * R_MID, ly = -Math.cos(a) * R_MID;
           return (
             <g key={op.label + i} className={on ? "tile is-on" : "tile"}>
-              <path d={tilePath(i, n, on ? R_OUT + 5 : R_OUT)} fill={on ? accent : "url(#tile-light)"}
+              <path d={tilePath(i, n, on ? R_OUT + 5 : R_OUT)} fill={on ? accent : `url(#tile-${uid})`}
                     style={on ? { filter: `drop-shadow(0 6px 14px ${accent}73)` } : undefined} />
               <text x={lx} y={ly} textAnchor="middle" dominantBaseline="central"
                     className={op.ext ? "tile-format" : "tile-label"} fill={on ? "#fff" : "var(--fg)"}>{op.label}</text>
@@ -301,7 +383,17 @@ function Wheel({ x, y, mode, ops, hover, fileName }: {
           </g>
         ))}
       </svg>
-      <div className="wheel-caption">{caption}</div>
+      {!embedded && <div className="wheel-caption">{caption}</div>}
+    </div>
+  );
+}
+
+/** A static, scaled-down wheel for feature cards. */
+export function MiniWheel({ mode, hover }: { mode: Mode; hover: number }) {
+  const size = (R_OUT + RIM + 8) * 2;
+  return (
+    <div className="mini-wheel" style={{ "--mini": 0.62, width: size * 0.62, height: size * 0.62 } as React.CSSProperties}>
+      <Wheel x={0} y={0} mode={mode} ops={OPS.photo[mode]} hover={hover} fileName="Vacation.heic" embedded />
     </div>
   );
 }

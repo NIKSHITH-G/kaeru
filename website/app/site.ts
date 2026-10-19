@@ -55,3 +55,32 @@ export async function latestRelease(): Promise<{ version: string; sizeMB: number
     return { version: "", sizeMB: null };
   }
 }
+
+export type ReleaseNote = { version: string; date: string; title: string; points: string[]; url: string };
+
+/** The latest few releases for "What's new", parsed from each release's Markdown notes. */
+export async function recentReleases(count = 3): Promise<ReleaseNote[]> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=${count}`, {
+      headers: { Accept: "application/vnd.github+json" },
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return [];
+    const releases: { tag_name: string; published_at: string; body: string | null; html_url: string; name: string }[] = await res.json();
+    return releases.map((r) => {
+      const lines = (r.body ?? "").split("\n").map((l) => l.trim());
+      const heading = lines.find((l) => l.startsWith("### "))?.slice(4);
+      const points = lines.filter((l) => l.startsWith("- ")).slice(0, 4)
+        .map((l) => l.slice(2).replace(/\*\*(.+?)\*\*/g, "$1").replace(/`(.+?)`/g, "$1"));
+      return {
+        version: r.tag_name.replace(/^v/, ""),
+        date: new Date(r.published_at).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" }),
+        title: heading ?? (points.length ? "Highlights" : r.name),
+        points,
+        url: r.html_url,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
