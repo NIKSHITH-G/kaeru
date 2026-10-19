@@ -56,6 +56,19 @@ if let command = arguments.first, command.hasPrefix("--") {
             print(ok ? "result is on the shelf" : "result missing from shelf")
             shelf.discardStaging()
             exit(ok ? 0 : 1)
+        case "--update-test":
+            // KAERU_FAKE_VERSION=0.0.1 Kaeru --update-test — runs the real update pipeline against GitHub
+            // (find, download, unpack, verify) without installing anything.
+            await Updater.shared.check(interactive: true)
+            switch Updater.shared.status {
+            case .ready(let release, let staged):
+                let version = Bundle(url: staged)?.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+                print("ready: Kaeru \(release.version), staged at \(staged.path), bundle version \(version)")
+                exit(version == release.version ? 0 : 1)
+            case .upToDate: print("up to date (\(Updater.shared.currentVersion))"); exit(0)
+            case .failed(let message): print("failed: \(message)"); exit(1)
+            default: print("unexpected state"); exit(1)
+            }
         case "--self-test":
             exit(SelfTest.run())
         case "--make-icon" where arguments.count >= 2:
@@ -79,6 +92,9 @@ if let command = arguments.first, command.hasPrefix("--") {
                 if let image = try? ImageOps.load(URL(fileURLWithPath: arguments[2])).0 {
                     Task { _ = await CropWindow.ask(image: image, title: "photo.png") }
                 }
+            case "update":
+                UpdateCard.show(Updater.Release(version: "0.9.9", notes: "### Movable shelves\n- …",
+                                                dmg: URL(string: "https://example.com")!, page: URL(string: "https://example.com")!))
             case "shelf":
                 ShelfManager.open(with: Array(files.dropFirst()))
             case let t where t.hasPrefix("onboarding"):
@@ -88,8 +104,10 @@ if let command = arguments.first, command.hasPrefix("--") {
                 MainWindow.show(page: AppModel.Page(rawValue: target.capitalized) ?? .home)
             }
             try? await Task.sleep(nanoseconds: 1_200_000_000)
-            let window = target == "shelf" ? NSApp.windows.first(where: { $0 is ShelfPanel }) : NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) })
-            if let view = (target == "shelf" ? window?.contentView : window?.contentView?.superview),
+            let window = target == "shelf" ? NSApp.windows.first(where: { $0 is ShelfPanel })
+                : target == "update" ? NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible })
+                : NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) })
+            if let view = (target == "shelf" || target == "update" ? window?.contentView : window?.contentView?.superview),
                let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
                 view.cacheDisplay(in: view.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "render.png"))
@@ -114,7 +132,7 @@ if let command = arguments.first, command.hasPrefix("--") {
             exit(2)
         }
     }
-    NSApplication.shared.setActivationPolicy(command == "--render" || command == "--shelf-test" ? .accessory : .prohibited)
+    NSApplication.shared.setActivationPolicy(command == "--render" || command == "--shelf-test" || command == "--update-test" ? .accessory : .prohibited)
     NSApplication.shared.run()
 } else {
     let delegate = MainActor.assumeIsolated { AppDelegate() }

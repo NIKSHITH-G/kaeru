@@ -1,14 +1,17 @@
 import AppKit
+import SwiftUI
 
-/// Checks GitHub Releases for a newer version, then downloads the DMG, swaps the app bundle
-/// in place and relaunches. Downloads made with URLSession aren't quarantined, so the new
-/// version opens without a Gatekeeper prompt.
+/// Keeps Kaeru up to date without getting in the way: checks GitHub Releases at launch and every
+/// six hours, downloads a new version in the background, then offers "Restart Now" in a small card.
+/// If you choose Later, the update installs itself the next time Kaeru quits.
+/// Downloads made with URLSession aren't quarantined, so the new version opens without a Gatekeeper prompt.
 @MainActor
 final class Updater: ObservableObject {
     static let shared = Updater()
     static let repository = "NIKSHITH-G/kaeru"
     static let autoCheckKey = "autoCheckUpdates"
     private static let lastCheckKey = "lastUpdateCheck"
+    private static let interval: TimeInterval = 6 * 3600
 
     struct Release {
         let version: String
@@ -21,23 +24,42 @@ final class Updater: ObservableObject {
         case idle, checking, upToDate
         case available(Release)
         case downloading(Double)
+        /// Downloaded and unpacked; waiting for a restart (or for Kaeru to quit).
+        case ready(Release, URL)
         case installing
         case failed(String)
     }
 
     @Published private(set) var status: Status = .idle
+    private var timer: Timer?
 
-    var currentVersion: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0" }
-
-    /// Daily background check; only speaks up when there's something new.
-    func checkOnLaunch() {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: Self.autoCheckKey) as? Bool ?? true else { return }
-        if let last = defaults.object(forKey: Self.lastCheckKey) as? Date, Date().timeIntervalSince(last) < 86_400 { return }
-        Task { await check(interactive: false) }
+    /// KAERU_FAKE_VERSION pretends to be an older build, so the update pipeline can be tested end to end.
+    var currentVersion: String {
+        ProcessInfo.processInfo.environment["KAERU_FAKE_VERSION"]
+            ?? Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
 
+    var readyRelease: Release? { if case .ready(let r, _) = status { return r }; return nil }
+
+    private var automatic: Bool { UserDefaults.standard.object(forKey: Self.autoCheckKey) as? Bool ?? true }
+
+    /// Checks now if it's been a while, then every six hours while Kaeru runs.
+    func startAutomaticChecks() {
+        let last = UserDefaults.standard.object(forKey: Self.lastCheckKey) as? Date ?? .distantPast
+        if automatic, Date().timeIntervalSince(last) > Self.interval { Task { await check(interactive: false) } }
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: Self.interval, repeats: true) { _ in
+            Task { @MainActor in
+                guard Updater.shared.automatic else { return }
+                await Updater.shared.check(interactive: false)
+            }
+        }
+    }
+
+    /// Finds the latest release and, if it's newer, downloads it straight away so it's ready to install.
     func check(interactive: Bool) async {
+        if case .ready = status { if let r = readyRelease { UpdateCard.show(r) }; return }
+        if case .downloading = status { return }
         status = .checking
         UserDefaults.standard.set(Date(), forKey: Self.lastCheckKey)
         do {
@@ -49,43 +71,41 @@ final class Updater: ObservableObject {
                 return
             }
             let release = try Self.parse(data)
-            if Self.isVersion(release.version, newerThan: currentVersion) {
-                status = .available(release)
-                if !interactive { promptToInstall(release) }
-            } else {
+            guard Self.isVersion(release.version, newerThan: currentVersion) else {
                 status = .upToDate
+                return
             }
+            status = .available(release)
+            await prepare(release)
         } catch {
             status = interactive ? .failed(error.localizedDescription) : .idle
         }
     }
 
-    func promptToInstall(_ release: Release) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Kaeru \(release.version) is available"
-        alert.informativeText = "You have \(currentVersion).\n\n" + String(release.notes.prefix(600))
-        alert.icon = NSApp.applicationIconImage
-        alert.addButton(withTitle: "Install and Relaunch")
-        alert.addButton(withTitle: "Later")
-        alert.addButton(withTitle: "Release Notes")
-        switch alert.runModal() {
-        case .alertFirstButtonReturn: Task { await install(release) }
-        case .alertThirdButtonReturn: NSWorkspace.shared.open(release.page)
-        default: break
-        }
-    }
-
-    func install(_ release: Release) async {
+    /// Downloads and unpacks the update, then offers it.
+    func prepare(_ release: Release) async {
         do {
             status = .downloading(0)
             let dmg = try await download(release.dmg)
-            status = .installing
             let staged = try await extractApp(from: dmg)
-            try relaunch(replacingWith: staged)
+            try? FileManager.default.removeItem(at: dmg)
+            status = .ready(release, staged)
+            UpdateCard.show(release)
         } catch {
             status = .failed("Update failed: \(error.localizedDescription)")
         }
+    }
+
+    func restartNow() {
+        guard case .ready(_, let staged) = status else { return }
+        status = .installing
+        do { try swap(in: staged, relaunch: true) } catch { status = .failed("Update failed: \(error.localizedDescription)") }
+    }
+
+    /// Called as Kaeru quits: a downloaded update is installed quietly, ready for next launch.
+    func installOnQuitIfReady() {
+        guard case .ready(_, let staged) = status else { return }
+        try? swap(in: staged, relaunch: false)
     }
 
     private func download(_ url: URL) async throws -> URL {
@@ -121,18 +141,19 @@ final class Updater: ObservableObject {
         return staged
     }
 
-    /// A tiny shell script waits for this process to quit, swaps the bundle and opens the new one.
-    private func relaunch(replacingWith staged: URL) throws {
+    /// A tiny shell script waits for this process to quit, swaps the bundle and (optionally) opens the new one.
+    private func swap(in staged: URL, relaunch: Bool) throws {
         let target = Bundle.main.bundleURL.path
         let script = """
         while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done
-        rm -rf "$1" && mv "$2" "$1" && xattr -dr com.apple.quarantine "$1" 2>/dev/null; open "$1"
+        rm -rf "$1" && mv "$2" "$1" && xattr -dr com.apple.quarantine "$1" 2>/dev/null
+        \(relaunch ? "open \"$1\"" : "true")
         """
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = ["-c", script, "sh", target, staged.path]
         try process.run()
-        NSApp.terminate(nil)
+        if relaunch { NSApp.terminate(nil) }
     }
 
     static func parse(_ data: Data) throws -> Release {
@@ -155,5 +176,89 @@ final class Updater: ObservableObject {
             if x != y { return x > y }
         }
         return false
+    }
+}
+
+/// "Kaeru 0.9.9 is ready": a small card under the menu bar with Restart Now / Later / What's New.
+@MainActor
+enum UpdateCard {
+    private static var panel: NSPanel?
+
+    static func show(_ release: Updater.Release) {
+        panel?.orderOut(nil)
+        let size = NSSize(width: 340, height: 132)
+        let p = NSPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless, .nonactivatingPanel],
+                        backing: .buffered, defer: false)
+        p.level = .statusBar
+        p.backgroundColor = .clear
+        p.isOpaque = false
+        p.hasShadow = true
+        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        p.contentView = NSHostingView(rootView: UpdateCardView(release: release, dismiss: { hide() }))
+        if let screen = NSScreen.main?.visibleFrame {
+            p.setFrameOrigin(NSPoint(x: screen.maxX - size.width - 12, y: screen.maxY - size.height - 10))
+        }
+        p.alphaValue = 0
+        p.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.25; p.animator().alphaValue = 1 }
+        panel = p
+    }
+
+    static func hide() {
+        guard let p = panel else { return }
+        NSAnimationContext.runAnimationGroup({ $0.duration = 0.2; p.animator().alphaValue = 0 }) {
+            Task { @MainActor in p.orderOut(nil) }
+        }
+        panel = nil
+    }
+}
+
+private struct UpdateCardView: View {
+    let release: Updater.Release
+    let dismiss: () -> Void
+
+    private var headline: String {
+        release.notes.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { $0.hasPrefix("### ") }.map { String($0.dropFirst(4)) } ?? "A new version is ready to install."
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(nsImage: Artwork.appMark(size: 34))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Kaeru \(release.version) is ready").font(.system(size: 13, weight: .semibold))
+                    Text(headline).font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 8) {
+                Button("What’s New") { NSWorkspace.shared.open(release.page) }.buttonStyle(.link).font(.system(size: 12))
+                Spacer()
+                Button("Later") { dismiss() }
+                Button("Restart Now") { Updater.shared.restartNow() }
+                    .buttonStyle(BrandButtonStyle())
+            }
+            .controlSize(.small)
+            Text("Or it installs by itself the next time you quit Kaeru.")
+                .font(.system(size: 10.5)).foregroundStyle(.tertiary)
+        }
+        .padding(14)
+        .frame(width: 340, height: 132)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.separator.opacity(0.5)))
+    }
+}
+
+/// Always-green primary button. System prominent buttons turn grey in windows that never become key,
+/// and the update card deliberately never takes focus.
+private struct BrandButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12).padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Theme.brand.swiftUI.opacity(configuration.isPressed ? 0.75 : 1)))
     }
 }

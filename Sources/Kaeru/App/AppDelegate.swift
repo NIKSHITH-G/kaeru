@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Carbon
 
 @MainActor
@@ -8,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var hotKey: HotKey?
     private var dragToggle: NSMenuItem!
     private var recentMenu = NSMenu()
+    private var updateItem: NSMenuItem!
+    private var updateObserver: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpStatusItem()
@@ -20,7 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             UserDefaults.standard.set(true, forKey: "onboarded")
             OnboardingWindow.show()
         }
-        Updater.shared.checkOnLaunch()
+        Updater.shared.startAutomaticChecks()
+        // A dot on the frog and a "Restart to Update" menu item whenever an update is ready.
+        updateObserver = Updater.shared.$status.receive(on: RunLoop.main).sink { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshUpdateIndicator() }
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -40,6 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let menu = NSMenu()
         menu.delegate = self
+        updateItem = add(menu, "Restart to Update", #selector(restartToUpdate))
+        updateItem.isHidden = true
         add(menu, "Open Kaeru", #selector(openMain))
         add(menu, "Convert Finder Selection", #selector(convertFinderSelection), key: "m", modifiers: [.control, .option])
         add(menu, "New Shelf", #selector(newShelf), key: "s", modifiers: [.control, .option])
@@ -101,12 +110,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             await Updater.shared.check(interactive: true)
             switch Updater.shared.status {
-            case .available(let release): Updater.shared.promptToInstall(release)
             case .upToDate: Toast.show("Kaeru \(Updater.shared.currentVersion) is the latest version")
             case .failed(let message): Toast.show(message, isError: true)
-            default: break
+            default: break  // a ready update shows its own card
             }
         }
+    }
+
+    @objc private func restartToUpdate() { Updater.shared.restartNow() }
+
+    private func refreshUpdateIndicator() {
+        let ready = Updater.shared.readyRelease
+        updateItem?.isHidden = ready == nil
+        updateItem?.title = ready.map { "Restart to Update to \($0.version)" } ?? "Restart to Update"
+        statusItem?.button?.image = ready == nil ? Artwork.menuBarIcon : Artwork.menuBarIconWithBadge
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        Updater.shared.installOnQuitIfReady()
     }
 
     @objc private func openMain() { MainWindow.show(page: .home) }

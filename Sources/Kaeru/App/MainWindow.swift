@@ -350,7 +350,7 @@ private struct SettingsView: View {
                 Picker("Save results", selection: $output) {
                     ForEach(OutputLocation.allCases) { Text($0.label).tag($0.rawValue) }
                 }
-                Toggle("Check for updates automatically", isOn: $autoUpdate)
+                Toggle("Download updates automatically", isOn: $autoUpdate)
             }
             Section("Drag wheel") {
                 Toggle("Open the wheel while dragging files", isOn: $dragWheel)
@@ -454,7 +454,10 @@ private struct AboutView: View {
         case .checking:
             ProgressView().controlSize(.small)
         case .available(let release):
-            Button("Install Kaeru \(release.version)") { Task { await updater.install(release) } }.buttonStyle(.borderedProminent)
+            Text("Kaeru \(release.version) found, downloading…").foregroundStyle(.secondary)
+        case .ready(let release, _):
+            Button("Restart to Update to \(release.version)") { updater.restartNow() }.buttonStyle(.borderedProminent)
+                .tint(Theme.brand.swiftUI)
         case .downloading(let p):
             ProgressView(value: p) { Text("Downloading…").font(.caption) }.frame(width: 220)
         case .installing:

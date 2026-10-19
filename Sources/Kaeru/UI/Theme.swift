@@ -101,6 +101,19 @@ enum Artwork {
         return image
     }
 
+    /// The menu bar frog with a small dot, shown while an update is ready to install.
+    static var menuBarIconWithBadge: NSImage {
+        let base = menuBarIcon
+        let image = NSImage(size: base.size, flipped: false) { rect in
+            base.draw(in: rect)
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: NSRect(x: rect.maxX - 6.5, y: rect.maxY - 6.5, width: 6.5, height: 6.5)).fill()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
     /// The app mark at any size; the same artwork as the app icon (scripts/make-icon.swift uses this too).
     static func appMark(size: CGFloat, inset: Bool = false) -> NSImage {
         NSImage(size: NSSize(width: size, height: size), flipped: false) { _ in
