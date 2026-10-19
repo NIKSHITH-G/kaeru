@@ -18,7 +18,7 @@ if let command = arguments.first, command.hasPrefix("--") {
             }
             exit(0)
         case "--render-wheel" where arguments.count >= 3:
-            // Kaeru --render-wheel <mode 0-2> <files…> — draws the wheel to wheel.png for design checks.
+            // Kaeru --render-wheel <mode 0-2> <files…> draws the wheel to wheel.png for design checks.
             let mode = WheelMode(rawValue: Int(arguments[1]) ?? 0) ?? .convert
             let targets = Array(files.dropFirst()).filter { $0.lastPathComponent != "dark" }
             let items = Registry.operations(for: targets, mode: mode)
@@ -44,7 +44,7 @@ if let command = arguments.first, command.hasPrefix("--") {
             }
             exit(0)
         case "--shelf-test" where arguments.count >= 3:
-            // Kaeru --shelf-test <op-id> <file> — puts the file on a real shelf, runs the operation through the
+            // Kaeru --shelf-test <op-id> <file> puts the file on a real shelf, runs the operation through the
             // JobCenter, and checks the result comes back onto that shelf (in its staging folder).
             ShelfManager.open(with: files)
             guard let shelf = ShelfManager.shelf(containing: files), let op = Registry.find(arguments[1], for: files) else { exit(2) }
@@ -59,7 +59,7 @@ if let command = arguments.first, command.hasPrefix("--") {
         case "--self-test":
             exit(SelfTest.run())
         case "--make-icon" where arguments.count >= 2:
-            // Kaeru --make-icon <out.png> — the 1024px app icon, from the same artwork the app draws.
+            // Kaeru --make-icon <out.png> writes the 1024px app icon, from the same artwork the app draws.
             let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024, bitsPerSample: 8,
                                        samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                                        bytesPerRow: 0, bitsPerPixel: 0)!

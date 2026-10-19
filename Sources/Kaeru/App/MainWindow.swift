@@ -114,7 +114,7 @@ private struct HomeView: View {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Change any file, from anywhere").font(.system(size: 24, weight: .bold, design: .rounded))
-                    Text("Drag a file and hold a key — the wheel appears right under your cursor. Everything stays on your Mac.")
+                    Text("Drag a file and hold a key, and the wheel appears right under your cursor. Everything stays on your Mac.")
                         .foregroundStyle(.secondary)
                 }
                 dropZone
@@ -426,7 +426,7 @@ private struct AboutView: View {
             Spacer()
             Image(nsImage: Artwork.appMark(size: 96)).shadow(color: .black.opacity(0.2), radius: 8, y: 4)
             Text("Kaeru").font(.system(size: 28, weight: .bold, design: .rounded))
-            Text("かえる — “to change”, and “frog”").foregroundStyle(.secondary)
+            Text("かえる: “to change”, and “frog”").foregroundStyle(.secondary)
             Text("Version \(updater.currentVersion)").font(.callout).foregroundStyle(.secondary)
             updateRow.frame(height: 32)
             HStack(spacing: 16) {

@@ -18,7 +18,7 @@ enum FileActions {
         instant("action.copy", "Copy", "doc.on.doc") { urls in
             NSPasteboard.general.clearContents()
             NSPasteboard.general.writeObjects(urls as [NSURL])
-            return "Copied \(urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) items") — paste in Finder"
+            return "Copied \(urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) items"). Paste in Finder"
         },
         instant("action.path", "Copy Path", "link") { urls in
             NSPasteboard.general.clearContents()

@@ -3,7 +3,7 @@ import { MiniWheel } from "../components/WheelDemo";
 import "./banner.css";
 
 // 1280×640 README banner, captured in light and dark (docs/images/banner-*.png). Not linked anywhere.
-export const metadata: Metadata = { title: "Kaeru — banner", robots: { index: false } };
+export const metadata: Metadata = { title: "Kaeru banner", robots: { index: false } };
 
 export default function Banner() {
   return (

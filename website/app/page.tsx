@@ -26,9 +26,9 @@ const WHEELS = [
 ];
 
 const FEATURES = [
-  { icon: CornerDownLeft, title: "Return in Finder", body: "Select files and press Return — the wheel opens, no drag needed. Renaming still works." },
+  { icon: CornerDownLeft, title: "Return in Finder", body: "Select files and press Return, and the wheel opens. No drag needed. Renaming still works." },
   { icon: Scissors, title: "Trim & crop built in", body: "A QuickTime-style trimmer and a crop tool with aspect presets, opened right from the wheel." },
-  { icon: Sparkles, title: "On-device AI", body: "Remove backgrounds, recognise text and make scanned PDFs searchable — with Apple's Vision, offline." },
+  { icon: Sparkles, title: "On-device AI", body: "Remove backgrounds, recognise text and make scanned PDFs searchable with Apple's Vision, offline." },
   { icon: Gauge, title: "See what's happening", body: "Live progress, one-click cancel, and a record of how much space compression saved." },
   { icon: RefreshCw, title: "Updates itself", body: "New versions install from inside the app. No App Store, no account." },
   { icon: Keyboard, title: "Your keys, your way", body: "Pick Shift, ⌘, ⌃, ⌥, fn or Tab for each wheel. Keyboard-only control with arrows and Return." },
@@ -36,7 +36,7 @@ const FEATURES = [
 
 const COMPARE: [string, string, string][] = [
   ["Your files stay on your Mac", "✓", "Uploaded to a server"],
-  ["Works offline", "✓", "—"],
+  ["Works offline", "✓", "No"],
   ["File size limits", "None", "Often 50–100 MB"],
   ["Batch & merge", "✓", "Usually paid"],
   ["Ads, sign-up, watermarks", "None", "Common"],
@@ -45,10 +45,10 @@ const COMPARE: [string, string, string][] = [
 
 const FAQ = [
   { q: "Is Kaeru really free?", a: "Yes. It's open source under the MIT license, with no ads, accounts or tracking. The code is on GitHub." },
-  { q: "Why does macOS say Kaeru can't be opened?", a: "Kaeru isn't signed with a paid Apple Developer certificate yet. Click Done, then open System Settings → Privacy & Security, scroll to Security and click Open Anyway. You only do this once — the step-by-step guide at getkaeru.vercel.app/install shows every click." },
+  { q: "Why does macOS say Kaeru can't be opened?", a: "Kaeru isn't signed with a paid Apple Developer certificate yet. Click Done, then open System Settings → Privacy & Security, scroll to Security and click Open Anyway. You only do this once. The step-by-step guide at getkaeru.vercel.app/install shows every click." },
   { q: "Does it upload my files?", a: "Never. Every conversion runs on your Mac using Apple's frameworks and a bundled FFmpeg. The only network request is an optional daily update check against GitHub." },
   { q: "Which Macs does it run on?", a: "Apple silicon Macs with macOS 13 Ventura or later. Background removal needs macOS 14." },
-  { q: "I already use Shift for another drag tool.", a: "Change the key for any wheel in Settings — ⌥ Option, fn and Tab are all available." },
+  { q: "I already use Shift for another drag tool.", a: "Change the key for any wheel in Settings: ⌥ Option, fn and Tab are all available." },
   { q: "What about PowerPoint and Pages files?", a: "Slides convert with PowerPoint or Keynote if installed, and with a built-in renderer otherwise. Pages documents use the Pages app." },
 ];
 
@@ -101,7 +101,7 @@ export default async function Home() {
           </h1>
           <p className="lede">
             Drag a file, hold <kbd>⇧</kbd>, drop it on what you want. <span className="maru">かえる</span> (kaeru)
-            means “to change” — and it turns every drag into a converter, editor and share menu, without uploading a byte.
+            means “to change”, and it turns every drag into a converter, editor and share menu, without uploading a byte.
           </p>
           <div className="cta">
             <a href={DOWNLOAD_URL} className="btn btn-big">
@@ -161,7 +161,7 @@ export default async function Home() {
             <div className="shot">
               <Image src="/shots/tutorial.png" alt="The hands-on tutorial" width={1120} height={1056} sizes="(max-width: 900px) 100vw, 35vw" />
             </div>
-            <p className="shot-caption"><b>Learn it in 30 seconds.</b> The first-run tutorial hands you a sample file to try the wheel on — and celebrates when you do.</p>
+            <p className="shot-caption"><b>Learn it in 30 seconds.</b> The first-run tutorial hands you a sample file to try the wheel on, and celebrates when you do.</p>
           </div>
         </section>
 
@@ -265,7 +265,7 @@ export default async function Home() {
           <Image src="/shots/icon.png" alt="" width={96} height={96} />
           <h2>Less busywork. More <span className="maru grad">kaeru</span>.</h2>
           <a href={DOWNLOAD_URL} className="btn">Download Kaeru for free</a>
-          <p className="meta">First launch: approve it once in Privacy &amp; Security — <a href="/install">here’s exactly how</a>. <a href={RELEASES_URL}>All releases</a></p>
+          <p className="meta">First launch: approve it once in Privacy &amp; Security. <a href="/install">here’s exactly how</a>. <a href={RELEASES_URL}>All releases</a></p>
         </section>
       </main>
 

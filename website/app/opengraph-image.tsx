@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-export const alt = "Kaeru — change any file without opening an app";
+export const alt = "Kaeru: change any file without opening an app";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -25,7 +25,7 @@ export default async function Image() {
           <div style={{ fontSize: 40, color: "#0d1f17", lineHeight: 1.2, maxWidth: 640 }}>
             Change any file without opening an app.
           </div>
-          <div style={{ fontSize: 26, color: "#058561" }}>Drag · hold ⇧ · drop — 350+ conversions, all on your Mac</div>
+          <div style={{ fontSize: 26, color: "#058561" }}>Drag · hold ⇧ · drop · 350+ conversions, all on your Mac</div>
         </div>
       </div>
     ),

@@ -4,7 +4,7 @@ import { Play, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { COLORS, type Category } from "../site";
 
-/** "Turn HEIC into JPG." — the format pair flips every couple of seconds. */
+/** "Turn HEIC into JPG.": the format pair flips every couple of seconds. */
 const PAIRS: [string, Category, string, Category][] = [
   ["HEIC", "image", "JPG", "image"],
   ["MOV", "video", "MP4", "video"],

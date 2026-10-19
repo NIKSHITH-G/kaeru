@@ -16,7 +16,7 @@ const tool = (label: string, result: (n: string) => string): Op => ({ label, cat
 const action = (label: string, message: string): Op => ({ label, category: "action", result: () => message });
 
 const ACTIONS: Op[] = [
-  action("AirDrop", "Sent with AirDrop"), action("Float", "Floating above your windows"), action("Copy", "Copied — paste in Finder"),
+  action("AirDrop", "Sent with AirDrop"), action("Float", "Floating above your windows"), action("Copy", "Copied. Paste in Finder"),
   action("Copy Path", "Copied path"), action("Move To…", "Moved to Documents"), action("Terminal", "Opened Terminal here"),
   action("Reveal", "Shown in Finder"),
 ];
@@ -288,7 +288,7 @@ export default function WheelDemo() {
         {!auto && !drag && !tried && (
           <div className="demo-hint">
             <b>Try it:</b> drag a file, then press <kbd>⇧</kbd> <kbd>⌘</kbd> or <kbd>⌃</kbd>
-            <span className="demo-hint-touch"> — on touch, pause while dragging</span>
+            <span className="demo-hint-touch"> (on touch, pause while dragging)</span>
           </div>
         )}
 

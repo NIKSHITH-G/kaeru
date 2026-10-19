@@ -8,11 +8,11 @@ const maru = Zen_Maru_Gothic({ variable: "--font-maru", weight: ["700"], subsets
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://getkaeru.vercel.app"),
-  title: "Kaeru — change any file without opening an app",
+  title: "Kaeru: change any file without opening an app",
   description:
-    "Drag a file, hold a key, drop it on what you want. 350+ conversions, trim, crop, OCR and background removal — free, open source and 100% on your Mac.",
+    "Drag a file, hold a key, drop it on what you want. 350+ conversions, trim, crop, OCR and background removal. Free, open source and 100% on your Mac.",
   openGraph: {
-    title: "Kaeru — change any file without opening an app",
+    title: "Kaeru: change any file without opening an app",
     description: "Drag, hold ⇧, drop. 350+ private, on-device conversions for macOS. Free and open source.",
     type: "website",
   },

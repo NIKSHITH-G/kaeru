@@ -108,7 +108,7 @@ private struct OnboardingView: View {
                         .offset(y: sin(t * 2.2) * 3)
                         .appear(t, 0.05)
                     Text("Welcome to Kaeru").font(.system(size: 32, weight: .bold, design: .rounded)).appear(t, 0.15)
-                    Text("かえる means “to change” — and “frog”.").foregroundStyle(.secondary).appear(t, 0.25)
+                    Text("かえる means “to change”, and “frog”.").foregroundStyle(.secondary).appear(t, 0.25)
                     FormatFlip(t: t - 0.4).padding(.vertical, 6).appear(t, 0.4)
                     Text("Drag any file, hold a key, and drop it on what you want. No apps to open, nothing uploaded.")
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).appear(t, 0.5)
@@ -164,7 +164,7 @@ private struct OnboardingView: View {
                         step(3, "Drop it on **JPG** in the wheel")
                     }
                 }
-                Text("Tip: hold ⌘ for tools or ⌃ for actions instead — try switching while the wheel is open.")
+                Text("Tip: hold ⌘ for tools or ⌃ for actions instead. Try switching while the wheel is open.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -184,7 +184,7 @@ private struct OnboardingView: View {
         VStack(spacing: 16) {
             KeyCap(text: "↩", large: true).scaleEffect(1.4).padding(.bottom, 6)
             Text("Press Return in Finder").font(.system(size: 26, weight: .bold, design: .rounded))
-            Text("Select files in Finder and press Return to open the wheel — no dragging needed. Renaming still works as usual.")
+            Text("Select files in Finder and press Return to open the wheel. No dragging needed. Renaming still works as usual.")
                 .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 420)
             if app.keyboardReady {
                 Label("Ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.headline)

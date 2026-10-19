@@ -6,7 +6,7 @@ import { DOWNLOAD_URL, GITHUB_URL } from "../site";
 import "./install.css";
 
 export const metadata: Metadata = {
-  title: "Install Kaeru — step by step",
+  title: "Install Kaeru, step by step",
   description: "Exactly how to download Kaeru, approve it in Privacy & Security, and turn on its keyboard features.",
 };
 
@@ -132,7 +132,7 @@ const STEPS: { title: string; body: React.ReactNode; art?: React.ReactNode }[] =
   },
   {
     title: "Open Kaeru for the first time",
-    body: <>Open your <b>Applications</b> folder (Finder → <kbd>⇧</kbd><kbd>⌘</kbd><kbd>A</kbd>) and <b>double-click Kaeru</b>. macOS shows “Kaeru” Not Opened, because Kaeru isn’t signed with a paid Apple certificate yet. <b>Click Done</b> — not Move to Trash.</>,
+    body: <>Open your <b>Applications</b> folder (Finder → <kbd>⇧</kbd><kbd>⌘</kbd><kbd>A</kbd>) and <b>double-click Kaeru</b>. macOS shows “Kaeru” Not Opened, because Kaeru isn’t signed with a paid Apple certificate yet. <b>Click Done</b>, not Move to Trash.</>,
     art: <NotOpenedAlert />,
   },
   {
@@ -141,22 +141,22 @@ const STEPS: { title: string; body: React.ReactNode; art?: React.ReactNode }[] =
   },
   {
     title: "Click Open Anyway",
-    body: <>Next to <b>“Kaeru” was blocked to protect your Mac.</b>, click <b>Open Anyway</b>. (This button only appears for about an hour after step 4 — if it’s missing, double-click Kaeru again, then come back.)</>,
+    body: <>Next to <b>“Kaeru” was blocked to protect your Mac.</b>, click <b>Open Anyway</b>. (This button only appears for about an hour after step 4. If it’s missing, double-click Kaeru again, then come back.)</>,
     art: <PrivacySecurity />,
   },
   {
     title: "Confirm",
-    body: <>In the dialog that appears, click <b>Open Anyway</b> again, then enter your <b>Mac password</b> or use <b>Touch ID</b>. Kaeru opens, the 🐸 appears in your menu bar, and the tutorial starts. You only do this once — updates install without it.</>,
+    body: <>In the dialog that appears, click <b>Open Anyway</b> again, then enter your <b>Mac password</b> or use <b>Touch ID</b>. Kaeru opens, the 🐸 appears in your menu bar, and the tutorial starts. You only do this once; updates install without it.</>,
     art: <ConfirmOpen />,
   },
   {
     title: "Turn on keyboard features (recommended)",
-    body: <>In the tutorial, click <b>Allow Keyboard Access…</b> → <b>Open System Settings</b>. macOS opens <b>Privacy &amp; Security → Accessibility</b> (on newer macOS: <b>Device Control and Data Access</b>): <b>switch on Kaeru</b> and confirm with your password. This enables <b>Return in Finder</b> and the Tab trigger. Kaeru picks it up within two seconds — no restart.</>,
+    body: <>In the tutorial, click <b>Allow Keyboard Access…</b> → <b>Open System Settings</b>. macOS opens <b>Privacy &amp; Security → Accessibility</b> (on newer macOS: <b>Device Control and Data Access</b>): <b>switch on Kaeru</b> and confirm with your password. This enables <b>Return in Finder</b> and the Tab trigger. Kaeru picks it up within two seconds, no restart needed.</>,
     art: <AccessibilityList />,
   },
   {
     title: "Allow Finder access when asked",
-    body: <>The first time you press Return in Finder (or <kbd>⌃</kbd><kbd>⌥</kbd><kbd>M</kbd>), macOS asks whether Kaeru may control Finder. <b>Click Allow</b> — Kaeru uses it only to read which files you selected. Converting slides asks the same for PowerPoint or Keynote.</>,
+    body: <>The first time you press Return in Finder (or <kbd>⌃</kbd><kbd>⌥</kbd><kbd>M</kbd>), macOS asks whether Kaeru may control Finder. <b>Click Allow</b>. Kaeru uses it only to read which files you selected. Converting slides asks the same for PowerPoint or Keynote.</>,
     art: <AutomationAlert />,
   },
 ];
@@ -206,7 +206,7 @@ export default function InstallPage() {
         </details>
         <details className="card">
           <summary>I don’t see the frog in the menu bar</summary>
-          <p>Kaeru lives only in the menu bar — it has no Dock icon. Open it again from Applications. If your menu bar is crowded, the frog may be hidden behind the notch: try quitting another menu bar app.</p>
+          <p>Kaeru lives only in the menu bar; it has no Dock icon. Open it again from Applications. If your menu bar is crowded, the frog may be hidden behind the notch: try quitting another menu bar app.</p>
         </details>
         <details className="card">
           <summary>Uninstall</summary>

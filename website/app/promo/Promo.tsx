@@ -167,7 +167,7 @@ export default function Promo() {
             })}
           </h1>
           <p className="promo-sub" style={{ opacity: fade(t, 2.7, 3.0), transform: rise(t, 2.7, 3.0) }}>
-            Japanese for “to change” — and “frog”.
+            Japanese for “to change”, and “frog”.
           </p>
         </div>
       )}

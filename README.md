@@ -1,7 +1,7 @@
 <a href="https://getkaeru.vercel.app">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.png">
-    <img src="docs/images/banner-light.png" alt="Kaeru — change any file without opening an app. Drag a file, hold Shift, drop on a format.">
+    <img src="docs/images/banner-light.png" alt="Kaeru: change any file without opening an app. Drag a file, hold Shift, drop on a format.">
   </picture>
 </a>
 

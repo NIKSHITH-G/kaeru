@@ -26,7 +26,7 @@ final class CropWindow: NSWindow, NSWindowDelegate {
         let size = NSSize(width: max(480, CGFloat(image.width) * fit + 40), height: CGFloat(image.height) * fit + 40 + 52)
         super.init(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .resizable],
                    backing: .buffered, defer: false)
-        self.title = "Crop — \(title)"
+        self.title = "Crop · \(title)"
         isReleasedWhenClosed = false
         delegate = self
         minSize = NSSize(width: 480, height: 360)

@@ -45,7 +45,7 @@ enum PresentationOps {
         }
         let slides = try await QuickLookOffice.slides(url)
         try ImageOps.makePDF(images: slides, to: tmp)
-        return (tmp, "Rendered with QuickLook — install Keynote or PowerPoint to include pictures")
+        return (tmp, "Rendered with QuickLook. Install Keynote or PowerPoint to include pictures")
     }
 }
 
@@ -95,6 +95,6 @@ enum PagesOps {
             try await ImageOps.write(img, to: out, quality: 0.92)
             return [out]
         }
-        throw fail("This Pages file has no preview — install Pages to convert it")
+        throw fail("This Pages file has no preview. Install Pages to convert it")
     }
 }

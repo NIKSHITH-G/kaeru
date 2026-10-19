@@ -110,7 +110,7 @@ enum Shell {
             lock.lock(); defer { lock.unlock() }
             let lines = String(decoding: errData, as: UTF8.self)
                 .split(separator: "\n").map(String.init).filter { !$0.isEmpty }
-            return lines.suffix(3).joined(separator: " — ")
+            return lines.suffix(3).joined(separator: " · ")
         }
     }
 }

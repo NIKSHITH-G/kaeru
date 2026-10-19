@@ -164,7 +164,7 @@ enum PDFOps {
                 result.append(text)
             }
         }
-        guard result.length > 0 else { throw fail("\(url.lastPathComponent) has no text layer — try Tools → Extract Text") }
+        guard result.length > 0 else { throw fail("\(url.lastPathComponent) has no text layer. Try Tools → Extract Text") }
         return result
     }
 }

@@ -181,7 +181,7 @@ final class ScaledWheelHost: NSView {
     }
 }
 
-/// "Turn HEIC into JPG" — the pair flips every 1.8 seconds. `t` is seconds since the screen appeared.
+/// "Turn HEIC into JPG": the pair flips every 1.8 seconds. `t` is seconds since the screen appeared.
 struct FormatFlip: View {
     let t: Double
     private static let pairs: [(String, String, String, String)] = [

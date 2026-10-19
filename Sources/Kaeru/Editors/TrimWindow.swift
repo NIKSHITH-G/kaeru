@@ -8,7 +8,7 @@ final class TrimWindow: NSWindow, NSWindowDelegate {
 
     static func ask(_ url: URL) async throws -> ClosedRange<Double>? {
         guard try await AVURLAsset(url: url).load(.isPlayable) else {
-            throw fail("Trim works with formats QuickTime can play — convert \(url.lastPathComponent) to MP4 or M4A first")
+            throw fail("Trim works with formats QuickTime can play. Convert \(url.lastPathComponent) to MP4 or M4A first")
         }
         let window = TrimWindow(url: url)
         return try await window.run()
@@ -17,7 +17,7 @@ final class TrimWindow: NSWindow, NSWindowDelegate {
     private init(url: URL) {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 760, height: 480),
                    styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
-        title = "Trim — \(url.lastPathComponent)"
+        title = "Trim · \(url.lastPathComponent)"
         isReleasedWhenClosed = false
         playerView.player = AVPlayer(url: url)
         playerView.controlsStyle = .inline
