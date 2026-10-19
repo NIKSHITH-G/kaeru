@@ -1,7 +1,8 @@
 import AppKit
 
-/// Draws the radial menu and turns drops, clicks and arrow keys into a chosen operation.
-/// The frosted-glass backdrop is a separate NSVisualEffectView masked to the ring (see WheelController).
+/// Kaeru's picker: the file sits on a pad in the middle of a little pond, and each choice is a lily
+/// pad floating around it. Turns drops, clicks and arrow keys into the chosen operation.
+/// The frosted-glass backdrop is a separate NSVisualEffectView masked to the pads (see WheelController).
 final class WheelView: NSView {
     private var items: [FileOperation] = []
     private var urls: [URL] = []
@@ -11,23 +12,32 @@ final class WheelView: NSView {
     /// Index of the highlighted slice; -1 is the centre (cancel), nil is nothing.
     private var hovered: Int?
 
-    static let pop: CGFloat = 5
-    /// Room under the disc for the caption capsule ("Convert photo.heic to PNG").
+    /// Room around the ring for an aimed pad to swell and ripple.
+    static let pop: CGFloat = 18
+    /// Room under the pond for the caption capsule ("Convert photo.heic to PNG").
     static let captionHeight: CGFloat = 50
-    /// Rim of base disc around the tiles, and the gap between neighbouring tiles.
-    private static let rim: CGFloat = 9, gap: CGFloat = 7, corner: CGFloat = 16
+    /// Radius of the file's pad in the middle.
+    private static let hub: CGFloat = 62
 
-    static func radii(forItems n: Int) -> (inner: CGFloat, mid: CGFloat, outer: CGFloat) {
-        // ~92pt of arc per tile keeps two-word labels readable; the hole fits the centre pill.
-        let mid = max(126, CGFloat(n) * 92 / (2 * .pi))
-        return (mid - 54, mid, mid + 56)
+    /// Pad size and ring radius for `n` pads: pads stay apart, with water between them.
+    static func pads(forItems n: Int) -> (pad: CGFloat, ring: CGFloat) {
+        let pad: CGFloat = n <= 8 ? 44 : (n <= 11 ? 40 : 36)
+        let spacing = pad * 2 + 14
+        let ring = max(hub + pad + 22, spacing / (2 * sin(.pi / CGFloat(max(n, 3)))))
+        return (pad, ring)
     }
 
-    static func diameter(forItems n: Int) -> CGFloat { (radii(forItems: n).outer + rim + pop) * 2 }
+    /// inner: the hub (aiming there cancels); mid: the ring of pad centres; outer: the far edge of the pads.
+    static func radii(forItems n: Int) -> (inner: CGFloat, mid: CGFloat, outer: CGFloat) {
+        let p = pads(forItems: n)
+        return (hub + 6, p.ring, p.ring + p.pad)
+    }
 
-    /// Window size for a wheel whose busiest mode has `n` items; the disc sits above the caption.
+    static func diameter(forItems n: Int) -> CGFloat { (radii(forItems: n).outer + pop) * 2 }
+
+    /// Window size for a pond whose busiest mode has `n` items; the pond sits above the caption.
     static func size(forItems n: Int) -> NSSize {
-        let side = diameter(forItems: n) + 40
+        let side = diameter(forItems: n) + 24
         return NSSize(width: side, height: side + captionHeight)
     }
 
@@ -55,12 +65,12 @@ final class WheelView: NSView {
         needsDisplay = true
     }
 
-    /// Ring plus centre disc, used to mask the glass backdrop.
+    /// The pads and the hub, used to mask the glass backdrop so only they are frosted.
     func backdropMask() -> NSImage {
-        let g = geometry
-        return NSImage(size: bounds.size, flipped: false) { _ in
+        NSImage(size: bounds.size, flipped: false) { _ in
             NSColor.black.setFill()
-            NSBezierPath(ovalIn: self.circle(g.outer + Self.rim)).fill()
+            NSBezierPath(ovalIn: self.circle(Self.hub)).fill()
+            for i in self.items.indices { self.padPath(i, scale: 1).fill() }
             return true
         }
     }
@@ -79,7 +89,7 @@ final class WheelView: NSView {
         let r = hypot(dx, dy)
         let g = geometry
         if r < g.inner { return -1 }
-        guard r <= g.outer + 16, !items.isEmpty else { return nil }
+        guard r <= g.outer + Self.pop + 10, !items.isEmpty else { return nil }
         var theta = .pi / 2 - atan2(dy, dx)
         if theta < 0 { theta += 2 * .pi }
         return min(Int(theta / step), items.count - 1)
@@ -102,61 +112,123 @@ final class WheelView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let g = geometry
-        drawBase(radius: g.outer + Self.rim)
-        for i in items.indices where i != hovered { drawTile(i, highlighted: false) }
-        if let h = hovered, items.indices.contains(h) { drawTile(h, highlighted: true) }
-        drawCenter(radius: g.inner - Self.gap)
-        drawCaption(below: g.outer + Self.rim)
+        drawWater()
+        for i in items.indices where i != hovered { drawPad(i, highlighted: false) }
+        if let h = hovered, items.indices.contains(h) { drawPad(h, highlighted: true) }
+        drawCenter(radius: Self.hub)
+        drawCaption(below: g.outer)
     }
 
-    /// The soft disc the tiles sit in: a pale, slightly translucent plate over the glass blur.
-    private func drawBase(radius: CGFloat) {
-        let disc = NSBezierPath(ovalIn: circle(radius))
-        let top = isDark ? NSColor(white: 0.16, alpha: 0.82) : NSColor(white: 0.97, alpha: 0.82)
-        let bottom = isDark ? NSColor(white: 0.1, alpha: 0.86) : NSColor(white: 0.91, alpha: 0.86)
-        NSGradient(starting: top, ending: bottom)?.draw(in: disc, angle: -90)
-        (isDark ? NSColor(white: 1, alpha: 0.08) : NSColor(white: 0, alpha: 0.07)).setStroke()
-        disc.lineWidth = 1
-        disc.stroke()
+    /// A faint ring of water joining the pads, so they read as one pond rather than loose buttons.
+    private func drawWater() {
+        let g = geometry
+        let water = NSBezierPath(ovalIn: circle(g.mid))
+        water.lineWidth = 2 * Self.pads(forItems: items.count).pad * 0.55
+        (isDark ? NSColor(srgbRed: 0.35, green: 0.85, blue: 0.65, alpha: 0.05) : NSColor(srgbRed: 0.1, green: 0.55, blue: 0.4, alpha: 0.05)).setStroke()
+        water.stroke()
     }
 
-    /// A rounded annular tile with parallel gaps to its neighbours, like a pillow on the plate.
-    private func tilePath(_ i: Int, outer ro: CGFloat) -> NSBezierPath {
-        let ri = geometry.inner
-        let h = Self.gap / 2, rc = Self.corner
-        let a0 = startAngle(i), a1 = startAngle(i + 1)  // clockwise: a0 > a1
-        if items.count == 1 {
-            let ring = NSBezierPath(ovalIn: circle(ro))
-            ring.append(NSBezierPath(ovalIn: circle(ri)).reversed)
-            return ring
+    private func padCenter(_ i: Int) -> NSPoint {
+        let angle = startAngle(i) - step / 2
+        return NSPoint(x: center.x + geometry.mid * cos(angle), y: center.y + geometry.mid * sin(angle))
+    }
+
+    /// A lily pad: a circle with the little wedge real pads have, its notch facing the file.
+    private func padPath(_ i: Int, scale: CGFloat) -> NSBezierPath {
+        let c = padCenter(i)
+        let r = Self.pads(forItems: items.count).pad * scale
+        let toward = atan2(center.y - c.y, center.x - c.x) * 180 / .pi  // degrees, pointing at the hub
+        let half: CGFloat = 9
+        let path = NSBezierPath()
+        let tip = NSPoint(x: c.x + cos(toward * .pi / 180) * r * 0.68, y: c.y + sin(toward * .pi / 180) * r * 0.68)
+        path.move(to: tip)
+        path.appendArc(withCenter: c, radius: r, startAngle: toward + half, endAngle: toward - half + 360, clockwise: false)
+        path.close()
+        return path
+    }
+
+    private func drawPad(_ i: Int, highlighted: Bool) {
+        let item = items[i]
+        let color = tint(item)
+        let r = Self.pads(forItems: items.count).pad
+        let scale: CGFloat = highlighted ? 1.16 : 1
+        let path = padPath(i, scale: scale)
+        let c = padCenter(i)
+
+        // Ripples spreading from the aimed pad.
+        if highlighted {
+            for (k, alpha) in [(1, 0.35), (2, 0.16)] {
+                let rr = r * scale + CGFloat(k) * 7
+                let ring = NSBezierPath(ovalIn: NSRect(x: c.x - rr, y: c.y - rr, width: rr * 2, height: rr * 2))
+                ring.lineWidth = 1.5
+                color.withAlphaComponent(CGFloat(alpha)).setStroke()
+                ring.stroke()
+            }
         }
-        // Corner angles, offset so each edge runs parallel to the radial line at distance h.
-        let os = a0 - asin(h / ro), oe = a1 + asin(h / ro)
-        let ins = a0 - asin(h / ri), ine = a1 + asin(h / ri)
-        func p(_ r: CGFloat, _ a: CGFloat) -> CGPoint { CGPoint(x: center.x + r * cos(a), y: center.y + r * sin(a)) }
-        // Direction of travel along a circle at angle a: clockwise (decreasing angle) or counter-clockwise.
-        func along(_ q: CGPoint, _ a: CGFloat, clockwise: Bool, _ d: CGFloat) -> CGPoint {
-            clockwise ? CGPoint(x: q.x + sin(a) * d, y: q.y - cos(a) * d) : CGPoint(x: q.x - sin(a) * d, y: q.y + cos(a) * d)
+
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = highlighted ? color.withAlphaComponent(0.5) : NSColor.black.withAlphaComponent(isDark ? 0.35 : 0.1)
+        shadow.shadowBlurRadius = highlighted ? 18 : 6
+        shadow.shadowOffset = NSSize(width: 0, height: -2)
+        shadow.set()
+        (highlighted ? color : (isDark ? NSColor(white: 0.13, alpha: 0.78) : NSColor(white: 1, alpha: 0.86))).setFill()
+        path.fill()
+        NSGraphicsContext.restoreGraphicsState()
+
+        NSGraphicsContext.saveGraphicsState()
+        path.addClip()
+        if highlighted {
+            NSGradient(starting: color.blended(withFraction: 0.25, of: .white)!, ending: color.blended(withFraction: 0.15, of: .black)!)?
+                .draw(in: path, angle: -90)
+        } else {
+            // A green tint toward the rim, like the edge of a leaf, and light from above.
+            let leaf = NSColor(srgbRed: 0.2, green: 0.75, blue: 0.5, alpha: isDark ? 0.14 : 0.1)
+            NSGradient(colors: [NSColor(white: 1, alpha: 0), leaf], atLocations: [0.55, 1], colorSpace: .sRGB)?
+                .draw(fromCenter: c, radius: 0, toCenter: c, radius: r, options: .drawsAfterEndingLocation)
+            NSGradient(starting: NSColor(white: 1, alpha: isDark ? 0.06 : 0.45), ending: NSColor(white: 1, alpha: 0))?.draw(in: path, angle: -90)
         }
-        let path = CGMutablePath()
-        let outerStart = p(ro, os), outerEnd = p(ro, oe), innerEnd = p(ri, ine), innerStart = p(ri, ins)
-        let rci = rc * 0.75
-        path.move(to: CGPoint(x: (outerStart.x + innerStart.x) / 2, y: (outerStart.y + innerStart.y) / 2))
-        // Each corner is rounded against the true tangent of its circle, then the arc picks up where the rounding ends.
-        path.addArc(tangent1End: outerStart, tangent2End: along(outerStart, os, clockwise: true, rc * 4), radius: rc)
-        path.addArc(center: center, radius: ro, startAngle: os - rc / ro, endAngle: oe + rc / ro, clockwise: true)
-        path.addArc(tangent1End: outerEnd, tangent2End: innerEnd, radius: rc)
-        path.addArc(tangent1End: innerEnd, tangent2End: along(innerEnd, ine, clockwise: false, rci * 4), radius: rci)
-        path.addArc(center: center, radius: ri, startAngle: ine + rci / ri, endAngle: ins - rci / ri, clockwise: false)
-        path.addArc(tangent1End: innerStart, tangent2End: outerStart, radius: rci)
-        path.closeSubpath()
-        return NSBezierPath(path)
+        NSGraphicsContext.restoreGraphicsState()
+
+        let rim = highlighted ? NSColor(white: 1, alpha: 0.35)
+            : NSColor(srgbRed: 0.2, green: 0.75, blue: 0.5, alpha: isDark ? 0.35 : 0.3)
+        rim.setStroke()
+        path.lineWidth = 1
+        path.stroke()
+
+        // Contents sit a little away from the notch, in the fuller part of the pad.
+        let away = atan2(c.y - center.y, c.x - center.x)
+        let p = NSPoint(x: c.x + cos(away) * r * 0.1, y: c.y + sin(away) * r * 0.1)
+        let ink = highlighted ? NSColor.white : NSColor.labelColor
+        let soft = highlighted ? NSColor(white: 1, alpha: 0.85) : NSColor.secondaryLabelColor
+        let width = r * scale * 1.55
+        if mode == .convert {
+            let caption = hint(for: item)
+            let nameSize: CGFloat = r >= 42 ? 14 : 12.5, captionSize: CGFloat = 8.5, symbolHeight: CGFloat = 15, spacing: CGFloat = 3
+            let block = symbolHeight + spacing + nameSize * 1.15 + (caption == nil ? 0 : captionSize * 1.3)
+            let top = p.y + block / 2
+            drawSymbol(symbol(for: item), at: NSPoint(x: p.x, y: top - symbolHeight / 2), color: highlighted ? .white : color, size: 13)
+            let nameY = top - symbolHeight - spacing - nameSize * 0.58
+            drawFitted(item.title.uppercased(), centeredAt: NSPoint(x: p.x, y: nameY), maxWidth: width, size: nameSize, minSize: 9.5,
+                       weight: .semibold, color: ink, kern: 0.5)
+            if let caption {
+                drawText(caption, at: NSPoint(x: p.x, y: nameY - nameSize * 0.58 - captionSize * 1.35), size: captionSize,
+                         weight: .medium, color: soft, width: width + 4)
+            }
+        } else {
+            let text = layoutFitted(item.title, maxWidth: width, size: 11, minSize: 8.5, weight: .semibold)
+            let symbolHeight: CGFloat = 18, spacing: CGFloat = 4
+            let blockTop = p.y + (symbolHeight + spacing + text.height) / 2
+            drawSymbol(symbol(for: item), at: NSPoint(x: p.x, y: blockTop - symbolHeight / 2), color: highlighted ? .white : color, size: 15)
+            drawFitted(item.title, centeredAt: NSPoint(x: p.x, y: blockTop - symbolHeight - spacing - text.height / 2),
+                       maxWidth: width, size: 11, minSize: 8.5, weight: .semibold, color: ink)
+        }
     }
 
-    /// The colour a tile lights up in: its format's category on the Convert wheel, the mode's colour otherwise.
+    /// The colour a pad lights up in: its format's category on the Convert pond, the mode's colour otherwise.
     private func tint(_ op: FileOperation) -> NSColor { Theme.color(for: op, mode: mode) }
 
-    /// A format's category symbol for Convert tiles.
+    /// A format's category symbol for Convert pads.
     private func symbol(for op: FileOperation) -> String {
         guard mode == .convert else { return op.symbol }
         switch Theme.category(forExt: op.targetExt ?? "") {
@@ -169,72 +241,6 @@ final class WheelView: NSView {
         case .slides: return "rectangle.on.rectangle"
         case .data: return "curlybraces"
         default: return "archivebox"
-        }
-    }
-
-    private func drawTile(_ i: Int, highlighted: Bool) {
-        let g = geometry
-        let item = items[i]
-        let color = tint(item)
-        let path = tilePath(i, outer: highlighted ? g.outer + Self.pop : g.outer)
-        let angle = startAngle(i) - step / 2
-        let labelPoint = NSPoint(x: center.x + g.mid * cos(angle), y: center.y + g.mid * sin(angle))
-
-        // Resting tiles are quiet glass; the hovered one fills with its own colour and glows.
-        NSGraphicsContext.saveGraphicsState()
-        let shadow = NSShadow()
-        shadow.shadowColor = highlighted ? color.withAlphaComponent(0.55) : NSColor.black.withAlphaComponent(isDark ? 0.25 : 0.05)
-        shadow.shadowBlurRadius = highlighted ? 20 : 2
-        shadow.shadowOffset = NSSize(width: 0, height: highlighted ? -3 : -1)
-        shadow.set()
-        (highlighted ? color : (isDark ? NSColor(white: 1, alpha: 0.06) : NSColor(white: 1, alpha: 0.78))).setFill()
-        path.fill()
-        NSGraphicsContext.restoreGraphicsState()
-
-        NSGraphicsContext.saveGraphicsState()
-        path.addClip()
-        if highlighted {
-            let top = color.blended(withFraction: 0.22, of: .white)!, bottom = color.blended(withFraction: 0.18, of: .black)!
-            NSGradient(starting: top, ending: bottom)?.draw(in: path, angle: -90)
-        } else {
-            // A faint sheen from the top, like light on glass.
-            let sheen = NSColor(white: 1, alpha: isDark ? 0.05 : 0.5)
-            NSGradient(starting: sheen, ending: NSColor(white: 1, alpha: 0))?.draw(in: path, angle: -90)
-        }
-        NSGraphicsContext.restoreGraphicsState()
-
-        (highlighted ? NSColor(white: 1, alpha: 0.3) : (isDark ? NSColor(white: 1, alpha: 0.09) : NSColor(white: 0, alpha: 0.07))).setStroke()
-        path.lineWidth = 1
-        path.stroke()
-
-        let ink = highlighted ? NSColor.white : NSColor.labelColor
-        let soft = highlighted ? NSColor(white: 1, alpha: 0.8) : NSColor.secondaryLabelColor
-        // Usable width: the chord across the tile at mid radius, minus the gaps and some padding.
-        let width = min(2 * g.mid * sin(step / 2) - Self.gap - 14, 112)
-        if mode == .convert {
-            // Icon in the format's colour, the format name, and a few words on what it's good for.
-            let caption = hint(for: item)
-            let symbolHeight: CGFloat = 18, spacing: CGFloat = 4
-            let nameSize: CGFloat = 15, captionSize: CGFloat = 9.5
-            let block = symbolHeight + spacing + nameSize * 1.2 + (caption == nil ? 0 : captionSize * 1.3 + 1)
-            let top = labelPoint.y + block / 2
-            drawSymbol(symbol(for: item), at: NSPoint(x: labelPoint.x, y: top - symbolHeight / 2),
-                       color: highlighted ? .white : color, size: 15)
-            let nameY = top - symbolHeight - spacing - nameSize * 0.6
-            drawFitted(item.title.uppercased(), centeredAt: NSPoint(x: labelPoint.x, y: nameY), maxWidth: width,
-                       size: nameSize, minSize: 10.5, weight: .semibold, color: ink, kern: 0.6)
-            if let caption {
-                drawText(caption, at: NSPoint(x: labelPoint.x, y: nameY - nameSize * 0.6 - captionSize * 1.35 - 1), size: captionSize,
-                         weight: .medium, color: soft, width: width + 6)
-            }
-        } else {
-            let text = layoutFitted(item.title, maxWidth: width, size: 12, minSize: 9.5, weight: .semibold)
-            let symbolHeight: CGFloat = 20, spacing: CGFloat = 5
-            let blockTop = labelPoint.y + (symbolHeight + spacing + text.height) / 2
-            drawSymbol(symbol(for: item), at: NSPoint(x: labelPoint.x, y: blockTop - symbolHeight / 2),
-                       color: highlighted ? .white : color, size: 17)
-            drawFitted(item.title, centeredAt: NSPoint(x: labelPoint.x, y: blockTop - symbolHeight - spacing - text.height / 2),
-                       maxWidth: width, size: 12, minSize: 9.5, weight: .semibold, color: ink)
         }
     }
 
@@ -289,73 +295,60 @@ final class WheelView: NSView {
         ])
     }
 
-    /// The hole in the middle: a pill naming the current choice (or the file, at rest), and the
-    /// three wheels as small icons, the current one lit.
+    /// The file's own pad in the middle: its thumbnail, what's being aimed at (or Cancel), and the
+    /// three modes as small icons with the current one lit.
     private func drawCenter(radius r: CGFloat) {
-        let hoveredItem = hovered.flatMap { items.indices.contains($0) ? items[$0] : nil }
-        let label: String
-        var ink = NSColor.labelColor
-        var leading: (symbol: String, color: NSColor)?
-        var showThumb = false
-        if hovered == -1 {
-            label = "Cancel"; ink = .secondaryLabelColor; leading = ("xmark", .systemRed)
-        } else if let op = hoveredItem {
-            label = mode == .convert ? "to " + op.title.uppercased() : op.title
-            leading = (symbol(for: op), tint(op))
-        } else {
-            label = items.isEmpty ? "Nothing here" : mode.title
-            ink = .secondaryLabelColor
-            showThumb = thumbnail != nil && !items.isEmpty
-        }
-
-        let font = NSFont.systemFont(ofSize: 14, weight: .semibold)
-        let iconWidth: CGFloat = (leading != nil || showThumb) ? 22 : 0
-        let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
-        let pillWidth = min(max(textWidth + iconWidth + 32, 96), r * 2 - 12)
-        let pill = NSRect(x: center.x - pillWidth / 2, y: center.y - 8, width: pillWidth, height: 34)
-        let path = NSBezierPath(roundedRect: pill, xRadius: 17, yRadius: 17)
+        let hub = NSBezierPath(ovalIn: circle(r))
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(isDark ? 0.4 : 0.1)
-        shadow.shadowBlurRadius = 10
-        shadow.shadowOffset = NSSize(width: 0, height: -2)
+        shadow.shadowColor = NSColor.black.withAlphaComponent(isDark ? 0.4 : 0.12)
+        shadow.shadowBlurRadius = 12
+        shadow.shadowOffset = NSSize(width: 0, height: -3)
         shadow.set()
-        (isDark ? NSColor(white: 0.2, alpha: 1) : .white).setFill()
-        path.fill()
+        (isDark ? NSColor(white: 0.17, alpha: 0.92) : NSColor(white: 1, alpha: 0.95)).setFill()
+        hub.fill()
         NSGraphicsContext.restoreGraphicsState()
-        (isDark ? NSColor(white: 1, alpha: 0.08) : NSColor(white: 0, alpha: 0.06)).setStroke()
-        path.lineWidth = 1
-        path.stroke()
+        let cancelling = hovered == -1
+        (cancelling ? NSColor.systemRed.withAlphaComponent(0.55) : NSColor(srgbRed: 0.2, green: 0.75, blue: 0.5, alpha: 0.45)).setStroke()
+        hub.lineWidth = cancelling ? 2 : 1.5
+        hub.stroke()
 
-        let fit = layoutFitted(label, maxWidth: pillWidth - 26 - iconWidth, size: 14, minSize: 10, weight: .semibold)
-        let one = fit.lines.count == 1 ? fit.lines[0] : label
-        let size = fit.lines.count == 1 ? fit.size : 10
-        let drawnWidth = (one as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: size, weight: .semibold)]).width
-        let contentWidth = min(drawnWidth, pillWidth - 26 - iconWidth) + iconWidth
-        let startX = center.x - contentWidth / 2
-        if let leading {
-            drawSymbol(leading.symbol, at: NSPoint(x: startX + 8, y: pill.midY), color: leading.color, size: 13)
-        } else if showThumb, let thumbnail {
-            thumbnail.draw(in: NSRect(x: startX, y: pill.midY - 9, width: 18, height: 18), from: .zero, operation: .sourceOver, fraction: 1)
+        let hoveredItem = hovered.flatMap { items.indices.contains($0) ? items[$0] : nil }
+        // Top: the file (or a cross while cancelling).
+        let iconCenter = NSPoint(x: center.x, y: center.y + 22)
+        if cancelling {
+            drawSymbol("xmark", at: iconCenter, color: .systemRed, size: 20)
+        } else if let thumbnail {
+            let side: CGFloat = 30
+            thumbnail.draw(in: NSRect(x: iconCenter.x - side / 2, y: iconCenter.y - side / 2, width: side, height: side),
+                           from: .zero, operation: .sourceOver, fraction: 1)
+        } else {
+            drawSymbol("doc", at: iconCenter, color: .secondaryLabelColor, size: 20)
         }
-        drawText(one, at: NSPoint(x: startX + iconWidth + drawnWidth / 2, y: pill.midY - size * 0.62), size: size,
-                 weight: .semibold, color: ink, width: drawnWidth + 8)
 
-        // The three wheels as icons under the pill; the key that opens each is shown when interactive.
+        // Middle: what letting go will do.
+        let label: String
+        var ink = NSColor.labelColor
+        if cancelling { label = "Cancel"; ink = .systemRed }
+        else if let op = hoveredItem { label = mode == .convert ? "to " + op.title.uppercased() : op.title }
+        else { label = items.isEmpty ? "Nothing here" : mode.title; ink = .secondaryLabelColor }
+        let fit = layoutFitted(label, maxWidth: r * 2 - 22, size: 13, minSize: 9.5, weight: .semibold)
+        drawText(fit.lines.count == 1 ? fit.lines[0] : label, at: NSPoint(x: center.x, y: center.y - 9), size: fit.lines.count == 1 ? fit.size : 9.5,
+                 weight: .semibold, color: ink, width: r * 2 - 16)
+
+        // Bottom: the three modes.
         let modes = WheelMode.allCases
-        let w: CGFloat = 28, h: CGFloat = 22, spacing: CGFloat = 4
+        let w: CGFloat = 22, h: CGFloat = 18, spacing: CGFloat = 3
         let total = CGFloat(modes.count) * w + CGFloat(modes.count - 1) * spacing
         for (i, m) in modes.enumerated() {
-            let rect = NSRect(x: center.x - total / 2 + CGFloat(i) * (w + spacing), y: pill.minY - 30, width: w, height: h)
+            let rect = NSRect(x: center.x - total / 2 + CGFloat(i) * (w + spacing), y: center.y - 36, width: w, height: h)
             let modeColor = [Theme.brand, Theme.Category.tool.color, Theme.Category.action.color][m.rawValue]
             if m == mode {
-                modeColor.withAlphaComponent(isDark ? 0.22 : 0.15).setFill()
-                NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7).fill()
+                modeColor.withAlphaComponent(isDark ? 0.24 : 0.16).setFill()
+                NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
             }
-            drawSymbol(m.symbol, at: NSPoint(x: rect.midX, y: rect.midY), color: m == mode ? modeColor : .tertiaryLabelColor, size: 12)
+            drawSymbol(m.symbol, at: NSPoint(x: rect.midX, y: rect.midY), color: m == mode ? modeColor : .tertiaryLabelColor, size: 10.5)
         }
-        let hint = interactive ? "1 · 2 · 3 to switch" : modes.map { Settings.modifier(for: $0).glyph }.joined(separator: "  ")
-        drawText(hint, at: NSPoint(x: center.x, y: pill.minY - 48), size: 9, weight: .medium, color: .tertiaryLabelColor, width: r * 2 - 20)
     }
 
     /// "Convert photo.heic to PNG" in a small capsule under the disc, with the file's thumbnail.
