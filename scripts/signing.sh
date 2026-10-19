@@ -22,6 +22,16 @@ setup_signing() {
         security unlock-keychain -p "$kc_pass" "$CODESIGN_KEYCHAIN"
         security import "$p12" -k "$CODESIGN_KEYCHAIN" -P "$pass" -T /usr/bin/codesign >/dev/null
         security set-key-partition-list -S apple-tool:,apple: -s -k "$kc_pass" "$CODESIGN_KEYCHAIN" >/dev/null
+        # On CI build machines codesign only finds keys in keychains on the search list
+        # (otherwise: errSecInternalComponent). Locally the search list is left alone.
+        if [ -n "${CI:-}" ]; then
+            local existing
+            existing=$(security list-keychains -d user | tr -d '"' | xargs)
+            # shellcheck disable=SC2086
+            security list-keychains -d user -s "$CODESIGN_KEYCHAIN" $existing
+            security unlock-keychain -p "$kc_pass" "$CODESIGN_KEYCHAIN"
+        fi
+        security find-identity -p codesigning "$CODESIGN_KEYCHAIN" | sed -n '1,3p'
         CODESIGN_IDENTITY="Kaeru Signing"
         trap 'security delete-keychain "$CODESIGN_KEYCHAIN" 2>/dev/null' EXIT
         echo "Signing with the Kaeru Signing certificate"

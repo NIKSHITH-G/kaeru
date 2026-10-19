@@ -90,7 +90,9 @@ def main(app):
         identity = os.environ.get("CODESIGN_IDENTITY", "-")
         keychain = os.environ.get("CODESIGN_KEYCHAIN")
         args = ["codesign", "--force", "--sign", identity] + (["--keychain", keychain] if keychain else [])
-        subprocess.run(args + [path], check=True, capture_output=True)
+        result = subprocess.run(args + [path], capture_output=True, text=True)
+        if result.returncode != 0:
+            sys.exit(f"codesign failed for {path}:\n{result.stderr.strip()}")
 
     size = sum(os.path.getsize(os.path.join(d, f)) for d in (bin_dir, fw_dir) for f in os.listdir(d))
     print(f"Bundled {len(os.listdir(bin_dir))} tools and {len(seen)} libraries ({size / 1e6:.0f} MB)")
