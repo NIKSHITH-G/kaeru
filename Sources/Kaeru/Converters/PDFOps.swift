@@ -1,0 +1,170 @@
+import AppKit
+import PDFKit
+import Quartz
+
+enum PDFOps {
+    static func open(_ url: URL) throws -> PDFDocument {
+        guard let doc = PDFDocument(url: url) else { throw fail("Couldn't open \(url.lastPathComponent)") }
+        if doc.isLocked { throw fail("\(url.lastPathComponent) is password protected") }
+        return doc
+    }
+
+    static func convertOps() -> [FileOperation] {
+        var ops: [FileOperation] = ["png", "jpg"].map { ext in
+            .perFile("pdf.\(ext)", ext.uppercased(), "photo.on.rectangle", ext: ext) { url, p in
+                try toImages(url, ext: ext, progress: p)
+            }
+        }
+        ops.append(.perFile("pdf.txt", "TXT", "doc.plaintext", ext: "txt") { url, _ in
+            let out = Output.file(for: url, ext: "txt")
+            try (try open(url).string ?? "").write(to: out, atomically: true, encoding: .utf8)
+            return [out]
+        })
+        for (ext, title) in [("md", "Markdown"), ("docx", "DOCX"), ("rtf", "RTF"), ("html", "HTML")] {
+            ops.append(.perFile("pdf.\(ext)", title, "doc.richtext", ext: ext) { url, _ in
+                let out = Output.file(for: url, ext: ext)
+                try await MainActor.run { try DocumentOps.write(try attributedText(url), to: out) }
+                return [out]
+            })
+        }
+        ops.append(.perFile("pdf.pptx", "PPTX", "rectangle.on.rectangle", ext: "pptx") { url, p in
+            let doc = try open(url)
+            guard let first = doc.page(at: 0) else { throw fail("\(url.lastPathComponent) has no pages") }
+            let box = first.bounds(for: .mediaBox)
+            let size = first.rotation % 180 == 0 ? box.size : CGSize(width: box.height, height: box.width)
+            var slides: [CGImage] = []
+            for i in 0..<doc.pageCount {
+                if let page = doc.page(at: i), let img = render(page, dpi: 200) { slides.append(img) }
+                p(Double(i + 1) / Double(doc.pageCount) * 0.8)
+            }
+            let out = Output.file(for: url, ext: "pptx")
+            try await PPTX.write(images: slides, slideSize: size, to: out)
+            return [out]
+        })
+        ops.append(.perFile("pdf.epub", "EPUB", "book", ext: "epub") { url, _ in
+            let out = Output.file(for: url, ext: "epub")
+            let markdown = try await MainActor.run { Markdown.fromAttributed(try attributedText(url)) }
+            try await EPUB.write(title: url.deletingPathExtension().lastPathComponent, markdown: markdown, to: out)
+            return [out]
+        })
+        return ops
+    }
+
+    static func toolOps() -> [FileOperation] {
+        [
+            .shrinking("pdf.compress", "Compress", "arrow.down.right.and.arrow.up.left") { url, _ in
+                let out = Output.file(for: url, ext: "pdf", suffix: "compressed")
+                let options: [PDFDocumentWriteOption: Any]
+                if #available(macOS 13.4, *) {
+                    options = [.saveImagesAsJPEGOption: true, .optimizeImagesForScreenOption: true]
+                } else {
+                    // Older systems: the "Reduce File Size" Quartz filter that Preview uses.
+                    let filter = QuartzFilter(url: URL(fileURLWithPath: "/System/Library/Filters/Reduce File Size.qfilter"))
+                    options = [PDFDocumentWriteOption(rawValue: "QuartzFilter"): filter as Any]
+                }
+                guard try open(url).write(to: out, withOptions: options) else { throw fail("Couldn't write compressed PDF") }
+                return [out]
+            },
+            .perFile("pdf.searchable", "Make Searchable", "doc.text.magnifyingglass") { url, _ in
+                let out = Output.file(for: url, ext: "pdf", suffix: "searchable")
+                guard try open(url).write(to: out, withOptions: [.saveTextFromOCROption: true]) else {
+                    throw fail("Couldn't write searchable PDF")
+                }
+                return [out]
+            },
+            .perFile("pdf.ocr", "Extract Text", "text.viewfinder") { url, p in
+                [try VisionOps.ocrPDF(url, progress: p)]
+            },
+            .perFile("pdf.split", "Split Pages", "square.split.2x1") { url, _ in
+                let doc = try open(url)
+                guard doc.pageCount > 1 else { throw fail("\(url.lastPathComponent) has only one page") }
+                let folder = try Output.folder(for: url, suffix: "pages")
+                let base = url.deletingPathExtension().lastPathComponent
+                for i in 0..<doc.pageCount {
+                    let single = PDFDocument()
+                    if let page = doc.page(at: i)?.copy() as? PDFPage { single.insert(page, at: 0) }
+                    single.write(to: folder.appendingPathComponent(String(format: "%@ %03d.pdf", base, i + 1)))
+                }
+                return [folder]
+            },
+            .perFile("pdf.rotate", "Rotate Right", "rotate.right") { url, _ in
+                let doc = try open(url)
+                for i in 0..<doc.pageCount { doc.page(at: i)?.rotation += 90 }
+                let out = Output.file(for: url, ext: "pdf", suffix: "rotated")
+                guard doc.write(to: out) else { throw fail("Couldn't write rotated PDF") }
+                return [out]
+            },
+        ]
+    }
+
+    /// Combines PDFs and images, in the order given, into one PDF.
+    static let combineOp = FileOperation(id: "pdf.combine", title: "Combine PDF", symbol: "doc.on.doc") { urls, progress in
+        let result = PDFDocument()
+        for (i, url) in urls.enumerated() {
+            if FileKind.of(url) == .pdf {
+                let doc = try open(url)
+                for p in 0..<doc.pageCount {
+                    if let page = doc.page(at: p)?.copy() as? PDFPage { result.insert(page, at: result.pageCount) }
+                }
+            } else {
+                let tmp = Output.temp(ext: "pdf")
+                defer { try? FileManager.default.removeItem(at: tmp) }
+                try ImageOps.makePDF(images: [try ImageOps.load(url).0], to: tmp)
+                if let page = PDFDocument(url: tmp)?.page(at: 0) { result.insert(page, at: result.pageCount) }
+            }
+            progress(Double(i + 1) / Double(urls.count))
+        }
+        let out = Output.file(named: "Combined.pdf", near: urls[0])
+        guard result.write(to: out) else { throw fail("Couldn't write combined PDF") }
+        return OpResult(outputs: [out], message: "\(result.pageCount) pages")
+    }
+
+    /// Renders a page at the given DPI, honouring its rotation.
+    static func render(_ page: PDFPage, dpi: CGFloat) -> CGImage? {
+        let box = page.bounds(for: .mediaBox)
+        let scale = dpi / 72
+        let rotated = page.rotation % 180 != 0
+        let w = Int(((rotated ? box.height : box.width) * scale).rounded())
+        let h = Int(((rotated ? box.width : box.height) * scale).rounded())
+        return ImageOps.draw(width: w, height: h, opaque: true) { ctx in
+            ctx.scaleBy(x: scale, y: scale)
+            page.transform(ctx, for: .mediaBox)
+            if let ref = page.pageRef { ctx.drawPDFPage(ref) }
+        }
+    }
+
+    /// Every page at 300 DPI; multi-page documents go into a folder.
+    /// `naming` is the file outputs are named after, when `url` is an intermediate temp PDF.
+    static func toImages(_ url: URL, ext: String, naming: URL? = nil, progress: ProgressHandler) throws -> [URL] {
+        let doc = try open(url)
+        let source = naming ?? url
+        let base = source.deletingPathExtension().lastPathComponent
+        let folder = doc.pageCount > 1 ? try Output.folder(for: source, suffix: ext.uppercased()) : nil
+        let uti = ext == "png" ? "public.png" : "public.jpeg"
+        for i in 0..<doc.pageCount {
+            guard let page = doc.page(at: i), let img = render(page, dpi: 300) else { continue }
+            let out = folder?.appendingPathComponent(String(format: "%@ %03d.%@", base, i + 1, ext))
+                ?? Output.file(for: source, ext: ext)
+            guard let dest = CGImageDestinationCreateWithURL(out as CFURL, uti as CFString, 1, nil) else { continue }
+            CGImageDestinationAddImage(dest, img, [kCGImageDestinationLossyCompressionQuality: 0.92,
+                                                   kCGImagePropertyDPIWidth: 300, kCGImagePropertyDPIHeight: 300] as CFDictionary)
+            CGImageDestinationFinalize(dest)
+            progress(Double(i + 1) / Double(doc.pageCount))
+            if folder == nil { return [out] }
+        }
+        return folder.map { [$0] } ?? []
+    }
+
+    static func attributedText(_ url: URL) throws -> NSAttributedString {
+        let doc = try open(url)
+        let result = NSMutableAttributedString()
+        for i in 0..<doc.pageCount {
+            if let text = doc.page(at: i)?.attributedString {
+                if result.length > 0 { result.append(NSAttributedString(string: "\n\n")) }
+                result.append(text)
+            }
+        }
+        guard result.length > 0 else { throw fail("\(url.lastPathComponent) has no text layer — try Tools → Extract Text") }
+        return result
+    }
+}

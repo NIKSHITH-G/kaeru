@@ -1,0 +1,31 @@
+name: Release
+
+# Push a tag like v1.2.0 to build Kaeru.dmg and attach it to a GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install helpers
+        run: brew install ffmpeg webp
+      - name: Build app with bundled helpers
+        run: VERSION="${GITHUB_REF_NAME#v}" scripts/build-app.sh --bundle-helpers
+      - name: Test the release binary
+        run: build/Kaeru.app/Contents/MacOS/Kaeru --self-test
+      - name: Package DMG
+        run: scripts/make-dmg.sh
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes --title "Kaeru ${GITHUB_REF_NAME#v}"
+          gh release upload "$GITHUB_REF_NAME" build/Kaeru.dmg --clobber
