@@ -25,7 +25,7 @@ enum Registry {
     private static func operations(for url: URL, mode: WheelMode) -> [FileOperation] {
         let kind = FileKind.of(url)
         let ext = FileKind.normalizedExt(url.pathExtension)
-        let list: [FileOperation]
+        var list: [FileOperation]
         switch mode {
         case .convert:
             switch kind {
@@ -51,10 +51,21 @@ enum Registry {
             case .audio: list = [EditorOps.trimOp(isVideo: false)] + MediaOps.toolOps(isVideo: false)
             case .video: list = [EditorOps.trimOp(isVideo: true), EditorOps.cropVideoOp] + MediaOps.toolOps(isVideo: true)
             case .pdf: list = PDFOps.toolOps()
-            case .document, .ebook: list = DocumentOps.toolOps()
+            case .document, .ebook:
+                let packaged = ["docx", "odt", "epub"].contains(ext)
+                list = DocumentOps.toolOps() + (packaged ? [OfficeTools.extractImages, OfficeTools.compress] : [])
+            case .presentation: list = OfficeTools.presentationOps(for: url)
+            case .spreadsheet:
+                list = DataOps.tableToolOps() + (ext == "xlsx" || ext == "ods" ? [OfficeTools.extractImages] : [])
+            case .subtitle: list = DataOps.subtitleToolOps()
+            case .archive: list = ArchiveOps.toolOps
+            case .folder: list = FolderTools.all
+            case .plist: list = DataOps.plistToolOps()
             case .json: list = DataOps.jsonToolOps()
-            default: list = []
+            case .pages, .other: list = []
             }
+            // The ⌘ wheel is never empty: anything can at least be zipped.
+            if list.isEmpty { list = [ArchiveOps.zipOp] }
         case .actions:
             list = FileActions.all
         }

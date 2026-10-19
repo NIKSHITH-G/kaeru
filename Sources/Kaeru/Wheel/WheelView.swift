@@ -18,8 +18,9 @@ final class WheelView: NSView {
     private static let rim: CGFloat = 9, gap: CGFloat = 7, corner: CGFloat = 16
 
     static func radii(forItems n: Int) -> (inner: CGFloat, mid: CGFloat, outer: CGFloat) {
-        let mid = max(120, CGFloat(n) * 78 / (2 * .pi))
-        return (mid - 60, mid, mid + 60)
+        // ~92pt of arc per tile keeps two-word labels readable; the hole fits the centre pill.
+        let mid = max(126, CGFloat(n) * 92 / (2 * .pi))
+        return (mid - 54, mid, mid + 56)
     }
 
     static func diameter(forItems n: Int) -> CGFloat { (radii(forItems: n).outer + rim + pop) * 2 }
@@ -133,17 +134,21 @@ final class WheelView: NSView {
         let os = a0 - asin(h / ro), oe = a1 + asin(h / ro)
         let ins = a0 - asin(h / ri), ine = a1 + asin(h / ri)
         func p(_ r: CGFloat, _ a: CGFloat) -> CGPoint { CGPoint(x: center.x + r * cos(a), y: center.y + r * sin(a)) }
+        // Direction of travel along a circle at angle a: clockwise (decreasing angle) or counter-clockwise.
+        func along(_ q: CGPoint, _ a: CGFloat, clockwise: Bool, _ d: CGFloat) -> CGPoint {
+            clockwise ? CGPoint(x: q.x + sin(a) * d, y: q.y - cos(a) * d) : CGPoint(x: q.x - sin(a) * d, y: q.y + cos(a) * d)
+        }
         let path = CGMutablePath()
         let outerStart = p(ro, os), outerEnd = p(ro, oe), innerEnd = p(ri, ine), innerStart = p(ri, ins)
+        let rci = rc * 0.75
         path.move(to: CGPoint(x: (outerStart.x + innerStart.x) / 2, y: (outerStart.y + innerStart.y) / 2))
-        // Outer-start corner, then along the outer arc (clockwise), then outer-end corner.
-        path.addArc(tangent1End: outerStart, tangent2End: p(ro, os - 0.3), radius: rc)
+        // Each corner is rounded against the true tangent of its circle, then the arc picks up where the rounding ends.
+        path.addArc(tangent1End: outerStart, tangent2End: along(outerStart, os, clockwise: true, rc * 4), radius: rc)
         path.addArc(center: center, radius: ro, startAngle: os - rc / ro, endAngle: oe + rc / ro, clockwise: true)
         path.addArc(tangent1End: outerEnd, tangent2End: innerEnd, radius: rc)
-        // Inner-end corner, back along the inner arc (counter-clockwise), inner-start corner.
-        path.addArc(tangent1End: innerEnd, tangent2End: p(ri, ine + 0.3), radius: rc * 0.75)
-        path.addArc(center: center, radius: ri, startAngle: ine + rc * 0.75 / ri, endAngle: ins - rc * 0.75 / ri, clockwise: false)
-        path.addArc(tangent1End: innerStart, tangent2End: outerStart, radius: rc * 0.75)
+        path.addArc(tangent1End: innerEnd, tangent2End: along(innerEnd, ine, clockwise: false, rci * 4), radius: rci)
+        path.addArc(center: center, radius: ri, startAngle: ine + rci / ri, endAngle: ins - rci / ri, clockwise: false)
+        path.addArc(tangent1End: innerStart, tangent2End: outerStart, radius: rci)
         path.closeSubpath()
         return NSBezierPath(path)
     }
@@ -178,13 +183,52 @@ final class WheelView: NSView {
         path.stroke()
 
         let ink = highlighted ? NSColor.white : NSColor.labelColor
-        let width = min(2 * g.mid * sin(step / 2) * 0.86, 96)
+        // Usable width: the chord across the tile at mid radius, minus the gaps and some padding.
+        let width = min(2 * g.mid * sin(step / 2) - Self.gap - 14, 112)
         if mode == .convert {
-            drawText(item.title.uppercased(), at: NSPoint(x: labelPoint.x, y: labelPoint.y - 10), size: item.title.count > 5 ? 13 : 16,
-                     weight: .bold, color: ink, width: width, kern: 0.4)
+            drawFitted(item.title.uppercased(), centeredAt: labelPoint, maxWidth: width, size: 16, minSize: 11, weight: .bold,
+                       color: ink, kern: 0.4)
         } else {
-            drawSymbol(item.symbol, at: NSPoint(x: labelPoint.x, y: labelPoint.y + 9), color: highlighted ? .white : .secondaryLabelColor)
-            drawText(item.title, at: NSPoint(x: labelPoint.x, y: labelPoint.y - 18), size: 11, weight: .semibold, color: ink, width: width)
+            let text = layoutFitted(item.title, maxWidth: width, size: 12, minSize: 9.5, weight: .semibold)
+            let symbolHeight: CGFloat = 20, spacing: CGFloat = 5
+            let blockTop = labelPoint.y + (symbolHeight + spacing + text.height) / 2
+            drawSymbol(item.symbol, at: NSPoint(x: labelPoint.x, y: blockTop - symbolHeight / 2),
+                       color: highlighted ? .white : .secondaryLabelColor)
+            drawFitted(item.title, centeredAt: NSPoint(x: labelPoint.x, y: blockTop - symbolHeight - spacing - text.height / 2),
+                       maxWidth: width, size: 12, minSize: 9.5, weight: .semibold, color: ink)
+        }
+    }
+
+    /// How `text` will be set within `maxWidth`: one line, shrunk if needed, else two balanced lines.
+    private func layoutFitted(_ text: String, maxWidth: CGFloat, size: CGFloat, minSize: CGFloat,
+                              weight: NSFont.Weight, kern: CGFloat = 0) -> (lines: [String], size: CGFloat, height: CGFloat) {
+        func width(_ s: String, _ pt: CGFloat) -> CGFloat {
+            (s as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: pt, weight: weight), .kern: kern]).width
+        }
+        // Shrink a little on one line first: it reads best.
+        var pt = size
+        while pt > max(minSize, size * 0.85) && width(text, pt) > maxWidth { pt -= 0.5 }
+        if width(text, pt) <= maxWidth { return ([text], pt, pt * 1.2) }
+        // Otherwise wrap at the space that best balances the two lines.
+        let words = text.split(separator: " ").map(String.init)
+        if words.count > 1 {
+            let splits = (1..<words.count).map { i in (words[..<i].joined(separator: " "), words[i...].joined(separator: " ")) }
+            let best = splits.min { max(width($0.0, size), width($0.1, size)) < max(width($1.0, size), width($1.1, size)) }!
+            pt = size
+            while pt > minSize && max(width(best.0, pt), width(best.1, pt)) > maxWidth { pt -= 0.5 }
+            return ([best.0, best.1], pt, pt * 2.3)
+        }
+        while pt > minSize && width(text, pt) > maxWidth { pt -= 0.5 }
+        return ([text], pt, pt * 1.2)
+    }
+
+    private func drawFitted(_ text: String, centeredAt p: NSPoint, maxWidth: CGFloat, size: CGFloat, minSize: CGFloat,
+                            weight: NSFont.Weight, color: NSColor, kern: CGFloat = 0) {
+        let layout = layoutFitted(text, maxWidth: maxWidth, size: size, minSize: minSize, weight: weight, kern: kern)
+        let lineHeight = layout.height / CGFloat(layout.lines.count)
+        for (i, line) in layout.lines.enumerated() {
+            let y = p.y + layout.height / 2 - lineHeight * CGFloat(i + 1)
+            drawText(line, at: NSPoint(x: p.x, y: y), size: layout.size, weight: weight, color: color, width: maxWidth + 8, kern: kern)
         }
     }
 
@@ -217,7 +261,7 @@ final class WheelView: NSView {
 
         let font = NSFont.systemFont(ofSize: 15, weight: .semibold)
         let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
-        let pillWidth = min(max(textWidth + 40, 92), r * 2 - 14)
+        let pillWidth = min(max(textWidth + 36, 92), r * 2 - 8)
         let pill = NSRect(x: center.x - pillWidth / 2, y: center.y - 13, width: pillWidth, height: 40)
         let path = NSBezierPath(roundedRect: pill, xRadius: 20, yRadius: 20)
         NSGraphicsContext.saveGraphicsState()
@@ -229,7 +273,10 @@ final class WheelView: NSView {
         (isDark ? NSColor(white: 0.22, alpha: 1) : .white).setFill()
         path.fill()
         NSGraphicsContext.restoreGraphicsState()
-        drawText(label, at: NSPoint(x: center.x, y: pill.minY + 9), size: 15, weight: .semibold, color: ink, width: pillWidth - 16)
+        let fit = layoutFitted(label, maxWidth: pillWidth - 22, size: 15, minSize: 10.5, weight: .semibold)
+        let one = fit.lines.count == 1 ? fit.lines[0] : label
+        drawText(one, at: NSPoint(x: center.x, y: pill.midY - fit.size * 0.62), size: fit.lines.count == 1 ? fit.size : 10.5,
+                 weight: .semibold, color: ink, width: pillWidth - 14)
 
         // Mode keys, small and quiet, under the pill.
         let modes = WheelMode.allCases
