@@ -20,18 +20,31 @@ enum OfficeApps {
     static func presentationToPDF(_ input: URL, _ output: URL) async throws {
         let ext = input.pathExtension.lowercased()
         if hasPowerPoint && ext != "key" {
-            try await run("""
-            on run argv
-                set wasRunning to application "Microsoft PowerPoint" is running
-                tell application "Microsoft PowerPoint"
-                    open POSIX file (item 1 of argv)
-                    set pres to active presentation
-                    save pres in POSIX file (item 2 of argv) as save as PDF
-                    close pres saving no
-                    if not wasRunning then quit
-                end tell
-            end run
-            """, input.path, output.path)
+            try await viaLockName(output) { tmp in
+                try await run("""
+                on run argv
+                    set wasRunning to application "Microsoft PowerPoint" is running
+                    tell application "Microsoft PowerPoint"
+                        open POSIX file (item 1 of argv)
+                        set pres to missing value
+                        repeat 480 times
+                            try
+                                set names to name of every presentation
+                                repeat with i from 1 to count of names
+                                    if item i of names is (item 3 of argv) then set pres to presentation i
+                                end repeat
+                            end try
+                            if pres is not missing value then exit repeat
+                            delay 0.25
+                        end repeat
+                        if pres is missing value then error "PowerPoint didn't open the file"
+                        save pres in POSIX file (item 2 of argv) as save as PDF
+                        close pres saving no
+                        if not wasRunning and (count of presentations) is 0 then quit
+                    end tell
+                end run
+                """, input.path, tmp.path, input.lastPathComponent)
+            }
         } else if hasKeynote {
             try await run("""
             on run argv
@@ -51,19 +64,46 @@ enum OfficeApps {
     /// Exports a Word, RTF or ODT document to PDF with Microsoft Word, keeping images, tables and styles.
     static func documentToPDF(_ input: URL, _ output: URL) async throws {
         guard hasWord else { throw fail("Microsoft Word isn't installed") }
-        try await run("""
-        on run argv
-            set wasRunning to application "Microsoft Word" is running
-            tell application "Microsoft Word"
-                open POSIX file (item 1 of argv)
-                set doc to active document
-                save as doc file name (item 2 of argv) file format format PDF
-                close doc saving no
-                if not wasRunning then quit
-            end tell
-        end run
-        """, input.path, output.path)
-        try requirePDF(output)
+        try await viaLockName(output) { tmp in
+            // `open` returns before the document has loaded, so wait for it by name before saving.
+            try await run("""
+            on run argv
+                set wasRunning to application "Microsoft Word" is running
+                tell application "Microsoft Word"
+                    open POSIX file (item 1 of argv)
+                    set doc to missing value
+                    repeat 480 times
+                        try
+                            set names to name of every document
+                            repeat with i from 1 to count of names
+                                if item i of names is (item 3 of argv) then set doc to document i
+                            end repeat
+                        end try
+                        if doc is not missing value then exit repeat
+                        delay 0.25
+                    end repeat
+                    if doc is missing value then error "Word didn't open the document"
+                    save as doc file name (item 2 of argv) file format format PDF
+                    close doc saving no
+                    if not wasRunning and (count of documents) is 0 then quit
+                end tell
+            end run
+            """, input.path, tmp.path, input.lastPathComponent)
+        }
+    }
+
+    /// Office apps are sandboxed: saving to a new folder makes them ask for access, often in a
+    /// dialog hidden behind other windows, and their own containers are off limits to Kaeru. Their
+    /// sandbox does allow any file named like a lock file ("~$…"), so they save one of those into
+    /// Kaeru's temporary folder and Kaeru moves it into place.
+    private static func viaLockName(_ output: URL, _ export: (URL) async throws -> Void) async throws {
+        let dir = try Output.tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let tmp = dir.appendingPathComponent("~$kaeru.pdf")
+        try await export(tmp)
+        try requirePDF(tmp)
+        try? FileManager.default.removeItem(at: output)
+        try FileManager.default.moveItem(at: tmp, to: output)
     }
 
     private static func requirePDF(_ url: URL) throws {

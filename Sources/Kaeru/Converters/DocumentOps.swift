@@ -11,7 +11,7 @@ enum DocumentOps {
         var list = targets + [(ext: "epub", title: "EPUB")]
         if OfficeApps.hasPages { list.append((ext: "pages", title: "Pages")) }
         return list.map { t in
-            .perFile("doc.\(t.ext)", t.title, "doc.text", ext: t.ext) { url, _ in
+            t.ext == "pdf" ? pdfOp() : .perFile("doc.\(t.ext)", t.title, "doc.text", ext: t.ext) { url, _ in
                 let out = Output.file(for: url, ext: t.ext)
                 switch t.ext {
                 case "epub":
@@ -19,22 +19,40 @@ enum DocumentOps {
                                          markdown: try await markdown(of: url), to: out)
                 case "pages":
                     try await toPages(url, out)
-                case "pdf" where OfficeApps.hasWord && ["docx", "doc", "rtf", "odt"].contains(FileKind.normalizedExt(url.pathExtension)):
-                    // Word lays the document out exactly, with images and styles; the built-in engine is the fallback.
-                    do {
-                        try await OfficeApps.documentToPDF(url, out)
-                    } catch {
-                        NSLog("Kaeru: Word export failed, using the built-in renderer: \(error.localizedDescription)")
-                        try? FileManager.default.removeItem(at: out)
-                        let text = try await load(url)
-                        try await MainActor.run { try write(text, to: out) }
-                    }
                 default:
                     let text = try await load(url)
                     try await MainActor.run { try write(text, to: out) }
                 }
                 return [out]
             }
+        }
+    }
+
+    /// DOCX → PDF goes through Word when it's installed, so the layout, images and styles match
+    /// exactly. If Word can't do it, the built-in engine makes a simpler PDF and says so.
+    private static func pdfOp() -> FileOperation {
+        FileOperation(id: "doc.pdf", title: "PDF", symbol: "doc.text", targetExt: "pdf") { inputs, progress in
+            var result = OpResult()
+            for (i, url) in inputs.enumerated() {
+                let out = Output.file(for: url, ext: "pdf")
+                var done = false
+                if OfficeApps.hasWord && ["docx", "doc", "rtf", "odt"].contains(FileKind.normalizedExt(url.pathExtension)) {
+                    do {
+                        try await OfficeApps.documentToPDF(url, out)
+                        done = true
+                    } catch {
+                        NSLog("Kaeru: Word export failed, using the built-in renderer: \(error.localizedDescription)")
+                        result.message = "Made without Word, so some pictures and styles may differ. Allow Kaeru to control Microsoft Word in System Settings → Privacy & Security → Automation"
+                    }
+                }
+                if !done {
+                    let text = try await load(url)
+                    try await MainActor.run { try write(text, to: out) }
+                }
+                result.outputs.append(out)
+                progress(Double(i + 1) / Double(inputs.count))
+            }
+            return result
         }
     }
 
