@@ -133,6 +133,7 @@ final class WheelController {
 
     func perform(_ op: FileOperation, on dropped: [URL]? = nil) {
         let targets = dropped?.isEmpty == false ? dropped! : urls
+        Recents.record(op, for: targets, mode: mode)
         hide()
         if op.isInstant {
             Task {
