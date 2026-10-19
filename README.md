@@ -66,14 +66,33 @@ Every conversion runs locally, using Apple's frameworks (ImageIO, PDFKit, Vision
 
 ## Install
 
-1. Download **[Kaeru.dmg](https://github.com/NIKSHITH-G/kaeru/releases/latest/download/Kaeru.dmg)** and drag Kaeru into Applications.
-2. Kaeru isn't signed with a paid Apple Developer certificate yet, so the first time, **right-click Kaeru → Open → Open**. Or run:
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/Kaeru.app
-   ```
-3. A short tutorial lets you try the wheel on a sample file.
+**📖 Illustrated guide: [getkaeru.vercel.app/install](https://getkaeru.vercel.app/install)**
 
-You need macOS 13 or later on Apple silicon. Background removal needs macOS 14. Updates install from inside the app: frog menu → **Check for Updates…**
+Kaeru isn't signed with a paid Apple Developer certificate yet, so macOS asks you to approve it once:
+
+1. **Download** [Kaeru.dmg](https://github.com/NIKSHITH-G/kaeru/releases/latest/download/Kaeru.dmg). It saves to your Downloads folder.
+2. **Double-click `Kaeru.dmg`.** A window opens showing Kaeru and an Applications folder.
+3. **Drag the Kaeru icon onto the Applications folder.** Then eject the disk by clicking ⏏ next to "Kaeru" in Finder's sidebar.
+4. **Open Applications** (Finder → ⇧⌘A) and **double-click Kaeru**. macOS says *"Kaeru" Not Opened*. Click **Done**, not Move to Trash.
+5. Click the ** Apple menu → System Settings… → Privacy & Security**, then **scroll down to the Security section**.
+6. Next to *"Kaeru" was blocked to protect your Mac.*, click **Open Anyway**.
+7. In the dialog, click **Open Anyway** again and enter your **password** or use **Touch ID**. Kaeru opens, a 🐸 appears in the menu bar, and the tutorial starts. You only do this once; updates install without it.
+8. **Keyboard features (recommended):** in the tutorial, click **Allow Keyboard Access… → Open System Settings**. Under **Privacy & Security → Accessibility**, switch on **Kaeru**. This enables Return in Finder and the Tab trigger.
+9. The first time you press Return in Finder, macOS asks whether Kaeru may control **Finder**. Click **Allow**; Kaeru only uses it to read which files you selected.
+
+**On macOS 13 Ventura or 14 Sonoma**, you can replace steps 5–7 with: **right-click Kaeru → Open → Open**.
+
+**"Kaeru is damaged and can't be opened"?** That's the same check. Open **Terminal** (Applications → Utilities), paste this line and press Return:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Kaeru.app
+```
+
+**Updating:** 🐸 → **Check for Updates…** → **Install and Relaunch**. Your settings are kept. If Return in Finder stops working after an update, switch Kaeru off and on under Privacy & Security → Accessibility.
+
+**Uninstall:** 🐸 → Quit Kaeru, drag it from Applications to the Trash, and remove it from Privacy & Security → Accessibility (select it, then click −).
+
+You need an Apple silicon Mac with macOS 13 or later. Background removal needs macOS 14.
 
 ## Build from source
 

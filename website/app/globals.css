@@ -338,3 +338,8 @@ h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -0.01em; }
 .release li { margin: 3px 0; }
 
 @keyframes nudge { 50% { transform: translateX(5px); } }
+
+.menu-pointer-low { top: 52px; left: 58%; }
+.step-link { font-size: 14px; font-weight: 600; color: var(--brand-deep); text-decoration: none; margin-top: auto; }
+@media (prefers-color-scheme: dark) { .step-link { color: var(--brand); } }
+.step-link:hover { text-decoration: underline; }

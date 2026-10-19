@@ -28,7 +28,7 @@ jobs:
           PREV=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
           git log ${PREV:+$PREV..}"$GITHUB_REF_NAME" --no-merges --format='### %s%n%n%b' \
             | awk '/^### Bump version/ {skip=1; next} /^### / {skip=0} !skip' > notes.md
-          printf '\n---\nInstall: open the DMG and drag Kaeru into Applications. First launch: right-click → Open.\n' >> notes.md
+          printf '\n---\n**New to Kaeru?** Open the DMG, drag Kaeru into Applications, double-click it and click Done, then go to System Settings → Privacy & Security → Open Anyway. Step-by-step guide with pictures: https://getkaeru.vercel.app/install\n\n**Already installed?** 🐸 → Check for Updates…\n' >> notes.md
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

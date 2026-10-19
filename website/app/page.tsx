@@ -44,7 +44,7 @@ const COMPARE: [string, string, string][] = [
 
 const FAQ = [
   { q: "Is Kaeru really free?", a: "Yes. It's open source under the MIT license, with no ads, accounts or tracking. The code is on GitHub." },
-  { q: "Why does macOS warn me the first time I open it?", a: "Kaeru isn't signed with a paid Apple Developer certificate yet. Right-click Kaeru in Applications, choose Open, then Open again — you only do this once." },
+  { q: "Why does macOS say Kaeru can't be opened?", a: "Kaeru isn't signed with a paid Apple Developer certificate yet. Click Done, then open System Settings → Privacy & Security, scroll to Security and click Open Anyway. You only do this once — the step-by-step guide at getkaeru.vercel.app/install shows every click." },
   { q: "Does it upload my files?", a: "Never. Every conversion runs on your Mac using Apple's frameworks and a bundled FFmpeg. The only network request is an optional daily update check against GitHub." },
   { q: "Which Macs does it run on?", a: "Apple silicon Macs with macOS 13 Ventura or later. Background removal needs macOS 14." },
   { q: "I already use Shift for another drag tool.", a: "Change the key for any wheel in Settings — ⌥ Option, fn and Tab are all available." },
@@ -78,7 +78,7 @@ export default async function Home() {
         <nav>
           <a href="#how">How it works</a>
           <a href="#formats">Formats</a>
-          <a href="#install">Install</a>
+          <a href="/install">Install</a>
           <a href="#faq">FAQ</a>
           <a href={GITHUB_URL} className="nav-gh" aria-label="GitHub"><GitHubMark size={18} /></a>
           <a href={DOWNLOAD_URL} className="btn btn-small">Download</a>
@@ -158,7 +158,7 @@ export default async function Home() {
 
         <section id="install" className="section">
           <h2>Installed in under a minute</h2>
-          <p className="section-lede">No App Store, no account. Kaeru is free and open source, so the first launch needs one extra click.</p>
+          <p className="section-lede">No App Store, no account. Kaeru isn’t signed with a paid Apple certificate yet, so macOS asks you to approve it once.</p>
           <ol className="steps">
             <li className="card step">
               <span className="step-n">1</span>
@@ -180,17 +180,18 @@ export default async function Home() {
             <li className="card step">
               <span className="step-n">3</span>
               <div className="step-art step-art-menu">
-                <span className="menu-item">Open</span>
-                <span className="menu-item is-dim">Show Package Contents</span>
-                <span className="menu-item is-dim">Move to Trash</span>
-                <MousePointerClick size={20} className="menu-pointer" />
+                <span className="menu-item is-dim">Privacy &amp; Security</span>
+                <span className="menu-item is-dim">“Kaeru” was blocked to protect your Mac.</span>
+                <span className="menu-item">Open Anyway</span>
+                <MousePointerClick size={20} className="menu-pointer menu-pointer-low" />
               </div>
-              <h3>Right-click → Open</h3>
-              <p>The first time only, right-click Kaeru and choose <b>Open</b>, then <b>Open</b> again. A 30-second tutorial follows.</p>
+              <h3>Approve it once</h3>
+              <p>Double-click Kaeru and click <b>Done</b>. Then open <b>System Settings → Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>.</p>
+              <a href="/install" className="step-link">Step-by-step guide with pictures →</a>
             </li>
           </ol>
           <div className="install-alt">
-            <span>Prefer Terminal? This clears the first-launch warning instead:</span>
+            <span>Prefer Terminal? This does the same as Open Anyway:</span>
             <CopyCommand command="xattr -dr com.apple.quarantine /Applications/Kaeru.app" />
           </div>
         </section>
@@ -255,7 +256,7 @@ export default async function Home() {
           <Image src="/shots/icon.png" alt="" width={96} height={96} />
           <h2>Less busywork. More <span className="maru grad">kaeru</span>.</h2>
           <a href={DOWNLOAD_URL} className="btn">Download Kaeru for free</a>
-          <p className="meta">Then right-click → Open the first time. <a href={RELEASES_URL}>All releases</a></p>
+          <p className="meta">First launch: approve it once in Privacy &amp; Security — <a href="/install">here’s exactly how</a>. <a href={RELEASES_URL}>All releases</a></p>
         </section>
       </main>
 
