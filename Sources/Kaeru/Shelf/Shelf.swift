@@ -184,6 +184,7 @@ private struct ShelfView: View {
                     Text("Drop files here").font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: 120)
+                .background(WindowDragArea())
             } else {
                 ScrollView {
                     VStack(spacing: 2) {
@@ -196,6 +197,8 @@ private struct ShelfView: View {
             Text(model.items.isEmpty ? "Files stay here until you drag them out." : "Drag out to save · ✨ to change a file · drop more in")
                 .font(.system(size: 10.5)).foregroundStyle(.tertiary)
                 .padding(.vertical, 7)
+                .frame(maxWidth: .infinity)
+                .background(WindowDragArea())
         }
         .frame(width: 300)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -233,6 +236,9 @@ private struct ShelfView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+        // Grab anywhere on the header (outside its buttons) to move the shelf.
+        .background(WindowDragArea())
+        .help("Drag to move the shelf")
     }
 
     private func headerButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
@@ -388,4 +394,17 @@ final class ShelfDragView: NSView, NSDraggingSource {
             MainActor.assumeIsolated { model.pruneMissing() }
         }
     }
+}
+
+/// A strip that moves its window when dragged. SwiftUI content inside a borderless panel swallows
+/// the clicks that `isMovableByWindowBackground` relies on, so this hands them to the window directly.
+private struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { WindowDragView() }
+    func updateNSView(_ view: NSView, context: Context) {}
+}
+
+private final class WindowDragView: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
+    override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
 }
