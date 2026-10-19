@@ -385,8 +385,9 @@ final class ShelfDragView: NSView, NSDraggingSource {
     /// Files made on the shelf move to where they're dropped (so that's where they're saved); files you brought
     /// in are only copied, so dragging them out never relocates your originals.
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        guard context == .outsideApplication else { return [.copy, .generic] }
-        return dragging.allSatisfy(\.staged) ? [.move, .copy, .generic] : [.copy, .link, .generic]
+        // Only real moves and copies: offering .link or .generic lets Finder drop an alias instead of the file.
+        guard context == .outsideApplication else { return .copy }
+        return dragging.allSatisfy(\.staged) ? [.move, .copy] : .copy
     }
 
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {

@@ -12,27 +12,26 @@ enum OfficeApps {
     }
 
     static var hasPowerPoint: Bool { isInstalled("com.microsoft.Powerpoint") }
+    static var hasWord: Bool { isInstalled("com.microsoft.Word") }
     static var hasKeynote: Bool { isInstalled("com.apple.iWork.Keynote") }
     static var hasPages: Bool { isInstalled("com.apple.iWork.Pages") }
 
-    /// Exports slides to PDF with PowerPoint or Keynote.
+    /// Exports slides to PDF with PowerPoint or Keynote, exactly as they look in the app.
     static func presentationToPDF(_ input: URL, _ output: URL) async throws {
         let ext = input.pathExtension.lowercased()
         if hasPowerPoint && ext != "key" {
-            try await viaOfficeSandbox(input, output) { inPath, outPath in
-                try await run("""
-                on run argv
-                    set wasRunning to application "Microsoft PowerPoint" is running
-                    tell application "Microsoft PowerPoint"
-                        open POSIX file (item 1 of argv)
-                        set pres to active presentation
-                        save pres in POSIX file (item 2 of argv) as save as PDF
-                        close pres saving no
-                        if not wasRunning then quit
-                    end tell
-                end run
-                """, inPath, outPath)
-            }
+            try await run("""
+            on run argv
+                set wasRunning to application "Microsoft PowerPoint" is running
+                tell application "Microsoft PowerPoint"
+                    open POSIX file (item 1 of argv)
+                    set pres to active presentation
+                    save pres in POSIX file (item 2 of argv) as save as PDF
+                    close pres saving no
+                    if not wasRunning then quit
+                end tell
+            end run
+            """, input.path, output.path)
         } else if hasKeynote {
             try await run("""
             on run argv
@@ -45,6 +44,31 @@ enum OfficeApps {
             """, input.path, output.path)
         } else {
             throw fail("Install Keynote (free) or PowerPoint for full-quality slide conversion")
+        }
+        try requirePDF(output)
+    }
+
+    /// Exports a Word, RTF or ODT document to PDF with Microsoft Word, keeping images, tables and styles.
+    static func documentToPDF(_ input: URL, _ output: URL) async throws {
+        guard hasWord else { throw fail("Microsoft Word isn't installed") }
+        try await run("""
+        on run argv
+            set wasRunning to application "Microsoft Word" is running
+            tell application "Microsoft Word"
+                open POSIX file (item 1 of argv)
+                set doc to active document
+                save as doc file name (item 2 of argv) file format format PDF
+                close doc saving no
+                if not wasRunning then quit
+            end tell
+        end run
+        """, input.path, output.path)
+        try requirePDF(output)
+    }
+
+    private static func requirePDF(_ url: URL) throws {
+        guard let handle = try? FileHandle(forReadingFrom: url), handle.readData(ofLength: 5) == Data("%PDF-".utf8) else {
+            throw fail("The app didn't produce a PDF")
         }
     }
 
@@ -81,24 +105,17 @@ enum OfficeApps {
         """, input.path, output.path)
     }
 
-    private static func run(_ script: String, _ args: String...) async throws {
-        try await Shell.run("/usr/bin/osascript", ["-e", script] + args)
-    }
-
-    /// Microsoft's sandboxed apps prompt for every folder they touch, except their shared group
-    /// container, so files are staged there.
-    private static func viaOfficeSandbox(_ input: URL, _ output: URL,
-                                         _ body: (String, String) async throws -> Void) async throws {
-        let base = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Group Containers/UBF8T346G9.Office/Kaeru/\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: base) }
-        let stagedIn = base.appendingPathComponent("input.\(input.pathExtension)")
-        let stagedOut = base.appendingPathComponent("output.\(output.pathExtension)")
-        try FileManager.default.copyItem(at: input, to: stagedIn)
-        try await body(stagedIn.path, stagedOut.path)
-        guard FileManager.default.fileExists(atPath: stagedOut.path) else { throw fail("The app didn't produce a file") }
-        try FileManager.default.moveItem(at: stagedOut, to: output)
+    /// Runs an AppleScript, giving up after `timeout` seconds so an app stuck on a dialog can't hang the job.
+    private static func run(_ script: String, _ args: String..., timeout: Double = 150) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { try await Shell.run("/usr/bin/osascript", ["-e", script] + args) }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                throw fail("The app didn't respond. It may be showing a dialog; answer it and try again")
+            }
+            try await group.next()
+            group.cancelAll()
+        }
     }
 }
 
@@ -155,8 +172,10 @@ enum QuickLookOffice {
     @MainActor
     static func slides(_ url: URL) async throws -> [CGImage] {
         let html = try await previewHTML(url)
-        let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 760, height: 800))
-        let window = NSWindow(contentRect: NSRect(x: -30_000, y: -30_000, width: 760, height: 800),
+        // Wide enough for any slide size (16:9 decks are 960pt), so nothing is clipped on the right.
+        let canvas: CGFloat = 2400
+        let web = WKWebView(frame: NSRect(x: 0, y: 0, width: canvas, height: 800))
+        let window = NSWindow(contentRect: NSRect(x: -30_000, y: -30_000, width: canvas, height: 800),
                               styleMask: .borderless, backing: .buffered, defer: false)
         window.contentView = web
         window.orderBack(nil)
@@ -176,8 +195,8 @@ enum QuickLookOffice {
               let info = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
               let rects = info["s"] as? [[Double]], !rects.isEmpty else { throw fail("No slides found") }
         let height = info["h"] as? Double ?? 800
-        window.setContentSize(NSSize(width: 760, height: height))
-        web.frame = NSRect(x: 0, y: 0, width: 760, height: height)
+        window.setContentSize(NSSize(width: canvas, height: height))
+        web.frame = NSRect(x: 0, y: 0, width: canvas, height: height)
 
         var images: [CGImage] = []
         for r in rects {

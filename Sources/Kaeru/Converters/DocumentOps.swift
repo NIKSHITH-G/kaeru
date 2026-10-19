@@ -19,6 +19,16 @@ enum DocumentOps {
                                          markdown: try await markdown(of: url), to: out)
                 case "pages":
                     try await toPages(url, out)
+                case "pdf" where OfficeApps.hasWord && ["docx", "doc", "rtf", "odt"].contains(FileKind.normalizedExt(url.pathExtension)):
+                    // Word lays the document out exactly, with images and styles; the built-in engine is the fallback.
+                    do {
+                        try await OfficeApps.documentToPDF(url, out)
+                    } catch {
+                        NSLog("Kaeru: Word export failed, using the built-in renderer: \(error.localizedDescription)")
+                        try? FileManager.default.removeItem(at: out)
+                        let text = try await load(url)
+                        try await MainActor.run { try write(text, to: out) }
+                    }
                 default:
                     let text = try await load(url)
                     try await MainActor.run { try write(text, to: out) }

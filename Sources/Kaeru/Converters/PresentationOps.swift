@@ -45,7 +45,10 @@ enum PresentationOps {
         }
         let slides = try await QuickLookOffice.slides(url)
         try ImageOps.makePDF(images: slides, to: tmp)
-        return (tmp, "Rendered with QuickLook. Install Keynote or PowerPoint to include pictures")
+        let note = OfficeApps.hasPowerPoint || OfficeApps.hasKeynote
+            ? "Made without PowerPoint, so pictures may be missing. Allow Kaeru to control PowerPoint in System Settings → Privacy & Security → Automation"
+            : "Rendered with QuickLook. Install Keynote or PowerPoint to include pictures"
+        return (tmp, note)
     }
 }
 
