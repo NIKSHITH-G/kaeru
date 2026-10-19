@@ -3,9 +3,9 @@
   position: fixed; inset: 0; width: 1920px; height: 1080px; overflow: hidden; z-index: 100;
   color: #0d1f17; font-family: var(--font-sans), -apple-system, sans-serif; color-scheme: light;
   --fg: #0d1f17; --muted: #5b6b63; --line: #d9e6de; --wheel-glass: #ffffffe6;
-  --plate-hi: #f4f4f4; --plate-lo: #e5e6e5; --tile-hi: #ffffff; --tile-lo: #efefef;
+  --sumi-paper: #f7f2e6; --sumi-ink: #17171a; --sumi-ink-soft: #17171a99; --sumi-wash: .12;
 }
-.promo *, .promo .wheel, .promo .tile path { animation: none !important; transition: none !important; }
+.promo *, .promo .wheel { animation: none !important; transition: none !important; }
 .promo-bg {
   position: absolute; inset: 0;
   background:

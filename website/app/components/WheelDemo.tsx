@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Archive, AudioWaveform, Braces, Film, File, FileText, Image as ImageIcon, Presentation, RefreshCcw, Sheet, Wrench, Zap } from "lucide-react";
 import { COLORS, type Category } from "../site";
 
 export type Mode = "convert" | "tools" | "actions";
@@ -48,7 +49,6 @@ export const OPS: Record<DemoFile["kind"], Record<Mode, Op[]>> = {
 };
 
 const MODE_KEYS: Record<Mode, string> = { convert: "⇧", tools: "⌘", actions: "⌃" };
-const MODE_TITLES: Record<Mode, string> = { convert: "Convert", tools: "Tools", actions: "Actions" };
 const MODE_COLORS: Record<Mode, string> = { convert: COLORS.brand, tools: COLORS.tool, actions: COLORS.action };
 
 const INITIAL: DemoFile[] = [
@@ -57,8 +57,8 @@ const INITIAL: DemoFile[] = [
   { id: "c", name: "Thesis.docx", kind: "doc", x: 0.82, y: 0.3 },
 ];
 
-// Same proportions as the app's wheel: rounded tiles on a pale plate.
-export const R_IN = 62, R_OUT = 152, R_MID = (R_IN + R_OUT) / 2, RIM = 9, GAP = 7, CORNER = 15;
+// Same proportions as the app's sumi-e picker: ink pools on a disc of paper.
+export const R_IN = 56, R_OUT = 144, R_MID = 100, RIM = 10, POOL = 32;
 
 function modeFromKey(e: KeyboardEvent): Mode | null {
   if (e.key === "Shift") return "convert";
@@ -307,86 +307,230 @@ export default function WheelDemo() {
 }
 
 const HINTS: Record<string, string> = {
-  jpg: "works everywhere", png: "lossless", webp: "small, for the web", avif: "smallest", pdf: "document",
-  mp4: "plays everywhere", gif: "animated", mp3: "plays everywhere", wav: "lossless", md: "plain text", epub: "e-book",
+  jpg: "universal", png: "lossless", webp: "small, web", avif: "smallest", pdf: "document", tiff: "print quality",
+  gif: "animated", ico: "Windows icon", mp4: "universal", webm: "web video", mkv: "any player", mp3: "universal",
+  m4a: "Apple audio", wav: "lossless", md: "plain text", epub: "e-book", html: "web page", rtf: "rich text",
+  odt: "LibreOffice", txt: "just text",
 };
 
-/** A rounded annular tile with parallel gaps, matching tilePath() in WheelView.swift. */
-function tilePath(i: number, n: number, ro: number) {
-  const step = (2 * Math.PI) / n, h = GAP / 2, ri = R_IN;
-  const pt = (r: number, a: number) => [Math.sin(a) * r, -Math.cos(a) * r];
-  if (n === 1) return `M0,${-ro} A${ro},${ro} 0 1 1 0,${ro} A${ro},${ro} 0 1 1 0,${-ro} Z M0,${-ri} A${ri},${ri} 0 1 0 0,${ri} A${ri},${ri} 0 1 0 0,${-ri} Z`;
-  const a0 = i * step, a1 = (i + 1) * step;
-  const os = a0 + Math.asin(h / ro), oe = a1 - Math.asin(h / ro), is = a0 + Math.asin(h / ri), ie = a1 - Math.asin(h / ri);
-  const co = CORNER / ro, ci = (CORNER * 0.75) / ri;
-  const [osx, osy] = pt(ro, os), [oex, oey] = pt(ro, oe), [isx, isy] = pt(ri, is), [iex, iey] = pt(ri, ie);
-  const along = (x0: number, y0: number, x1: number, y1: number, d: number) => {
-    const len = Math.hypot(x1 - x0, y1 - y0);
-    return [x0 + ((x1 - x0) / len) * d, y0 + ((y1 - y0) / len) * d];
-  };
-  const [s0x, s0y] = along(osx, osy, isx, isy, CORNER), [s1x, s1y] = pt(ro, os + co), [s2x, s2y] = pt(ro, oe - co);
-  const [s3x, s3y] = along(oex, oey, iex, iey, CORNER), [s4x, s4y] = along(iex, iey, oex, oey, CORNER * 0.75);
-  const [s5x, s5y] = pt(ri, ie - ci), [s6x, s6y] = pt(ri, is + ci), [s7x, s7y] = along(isx, isy, osx, osy, CORNER * 0.75);
-  const large = oe - os > Math.PI ? 1 : 0;
-  return `M${s0x},${s0y} Q${osx},${osy} ${s1x},${s1y} A${ro},${ro} 0 ${large} 1 ${s2x},${s2y} Q${oex},${oey} ${s3x},${s3y}
-    L${s4x},${s4y} Q${iex},${iey} ${s5x},${s5y} A${ri},${ri} 0 ${large} 0 ${s6x},${s6y} Q${isx},${isy} ${s7x},${s7y} Z`;
+const CATEGORY_ICONS: Record<Category, typeof File> = {
+  image: ImageIcon, video: Film, audio: AudioWaveform, pdf: FileText, document: FileText, spreadsheet: Sheet,
+  slides: Presentation, data: Braces, archive: Archive, tool: Wrench, action: Zap, brand: RefreshCcw,
+};
+const MODE_ICONS: Record<Mode, typeof File> = { convert: RefreshCcw, tools: Wrench, actions: Zap };
+
+/** Deterministic wobble for hand-made edges, matching wobble() in WheelView.swift. */
+const wobble = (x: number, seed: number) =>
+  Math.sin(x * 3.1 + seed) * 0.5 + Math.sin(x * 7.3 + seed * 1.7) * 0.3 + Math.sin(x * 13.7 + seed * 0.3) * 0.2;
+
+/** An irregular pool of ink around (cx, cy). */
+function poolPath(cx: number, cy: number, r: number, seed: number) {
+  let d = "";
+  for (let k = 0; k <= 56; k++) {
+    const t = (k / 56) * 2 * Math.PI, rr = r * (1 + wobble(t * 1.3, seed) * 0.2);
+    d += `${k ? "L" : "M"}${(cx + rr * Math.cos(t)).toFixed(1)},${(cy + rr * Math.sin(t)).toFixed(1)}`;
+  }
+  return d + "Z";
 }
 
-export function Wheel({ x, y, mode, ops, hover, fileName, scale = 1, embedded = false, resize = false }: {
+/** Rounded so the server and the browser render identical numbers (no hydration mismatch). */
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
+/** The centre of choice `i` of `n`, clockwise from 12 o'clock. */
+const spot = (i: number, n: number) => {
+  const a = ((i + 0.5) * 2 * Math.PI) / n;
+  return { x: r2(Math.sin(a) * R_MID), y: r2(-Math.cos(a) * R_MID), a };
+};
+
+type Ink = { angle: number; radius: number; color: string; trail: { x: number; y: number }[]; fills: number[]; wave: number };
+
+/** You are a drop of ink: it flows out of the file toward the aimed choice, glides around the disc
+ *  between choices, then soaks in while that pool fills with colour from the bottom. Mirrors tick()
+ *  in WheelView.swift. */
+function useInk(hover: number | null, colors: string[], still: boolean, travel?: number): Ink {
+  const n = colors.length;
+  const [ink, setInk] = useState<Ink>({ angle: 0, radius: 0, color: colors[0] ?? "#888", trail: [], fills: colors.map(() => 0), wave: 0 });
+  const state = useRef(ink);
+  const target = useRef(hover);
+  useEffect(() => { target.current = hover; }, [hover]);
+
+  // The end state: the drop has arrived and its pool is full.
+  const settledInk = (): Ink => {
+    const h = hover !== null && hover >= 0 && hover < n ? hover : null;
+    return { angle: h !== null ? spot(h, n).a : 0, radius: h !== null ? R_MID : 0, color: h !== null ? colors[h] : colors[0] ?? "#888",
+             trail: [], fills: colors.map((_, i) => (i === h ? 1 : 0)), wave: 1.3 };
+  };
+
+  useEffect(() => {
+    if (still || travel !== undefined) return;
+    // Reduced motion: jump straight to the end state.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const frame = requestAnimationFrame(() => { state.current = settledInk(); setInk(state.current); });
+      return () => cancelAnimationFrame(frame);
+    }
+    let frame = 0, last = performance.now();
+    const closeness = (s: Ink, i: number) => {
+      const p = spot(i, n), hx = Math.sin(s.angle) * s.radius, hy = -Math.cos(s.angle) * s.radius;
+      const t = Math.max(0, Math.min(1, 1 - (Math.hypot(hx - p.x, hy - p.y) - POOL * 0.25) / (POOL * 1.5)));
+      return t * t * (3 - 2 * t);
+    };
+    const step = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const s = { ...state.current, trail: [...state.current.trail], fills: [...state.current.fills] };
+      if (s.fills.length !== n) s.fills = colors.map(() => 0);
+      const k = 1 - Math.exp(-dt * 13), h = target.current;
+      let ta = s.angle, tr = s.radius;
+      if (h !== null && h >= 0 && h < n) { ta = spot(h, n).a; tr = R_MID; s.color = colors[h]; }
+      else if (h === -1) tr = 0;
+      if (s.radius < R_IN * 0.6) s.angle = ta;
+      let da = (ta - s.angle) % (2 * Math.PI);
+      if (da > Math.PI) da -= 2 * Math.PI; else if (da < -Math.PI) da += 2 * Math.PI;
+      s.angle += da * k;
+      const dr = tr - s.radius;
+      s.radius += dr * k;
+      const head = { x: Math.sin(s.angle) * s.radius, y: -Math.cos(s.angle) * s.radius };
+      const tail = s.trail[s.trail.length - 1];
+      if (s.radius > R_IN * 0.7 && (!tail || Math.hypot(tail.x - head.x, tail.y - head.y) > 1.5)) {
+        s.trail.push(head);
+        if (s.trail.length > 16) s.trail.shift();
+      } else if (s.trail.length) s.trail.shift();
+      let settled = Math.abs(da) < 0.002 && Math.abs(dr) < 0.3 && s.trail.length === 0;
+      s.fills = s.fills.map((f, i) => {
+        const goal = i === h ? closeness(s, i) : closeness(s, i) * 0.3;
+        const next = f + (goal - f) * (1 - Math.exp(-dt * (goal > f ? 6 : 9)));
+        if (Math.abs(goal - next) > 0.003) settled = false;
+        return next;
+      });
+      s.wave += dt * 5;
+      state.current = s;
+      setInk(s);
+      if (!settled) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hover, n, still, travel === undefined]);
+  // Driven by a clock (the promo recorder): the drop is `travel` of the way there, then the pool fills.
+  if (travel !== undefined && hover !== null && hover >= 0 && hover < n) {
+    const ease = (p: number) => 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 3);
+    const a = spot(hover, n).a, from = R_IN * 0.7, radius = from + (R_MID - from) * ease(travel / 0.55);
+    const trail = travel < 0.6 ? Array.from({ length: 10 }, (_, k) => {
+      const r = from + (radius - from) * (k / 9) * Math.min(1, 1 - (travel - 0.4) * 2.5);
+      return { x: Math.sin(a) * r, y: -Math.cos(a) * r };
+    }) : [];
+    return { angle: a, radius, color: colors[hover], trail, fills: colors.map((_, i) => (i === hover ? ease((travel - 0.4) / 0.6) : 0)), wave: travel * 4 };
+  }
+  // Stills (the feature cards) never animate.
+  return still ? settledInk() : ink;
+}
+
+export function Wheel({ x, y, mode, ops, hover, fileName, scale = 1, embedded = false, resize = false, travel }: {
   x: number; y: number; mode: Mode; ops: Op[]; hover: number | null; fileName: string; scale?: number; embedded?: boolean;
+  /** 0→1 progress of the ink toward the hovered choice, for clock-driven recordings; omit to animate live. */
+  travel?: number;
   /** Scale by resizing the SVG instead of a CSS transform. Slower, but text is redrawn crisply every frame,
    *  which the promo recorder needs (Chrome can leave SVG text stale under a changing CSS scale). */
   resize?: boolean;
 }) {
   const n = Math.max(ops.length, 1);
-  const step = (2 * Math.PI) / n;
+  const colors = ops.map((op) => COLORS[op.category]);
+  const ink = useInk(hover, colors, embedded, travel);
   const hovered = hover !== null && hover >= 0 ? ops[hover] : null;
-  const accent = MODE_COLORS[mode];
   const size = (R_OUT + RIM + 8) * 2;
   const px = resize ? size * scale : size;
-  const pill = hover === -1 ? "Cancel" : hovered ? hovered.label : MODE_TITLES[mode];
-  const pillWidth = Math.max(96, pill.length * 9 + 40);
-  const uid = useId();
-  const caption = hover === -1 ? "Drop here to cancel"
-    : hovered?.ext ? `Convert ${fileName} to ${hovered.label}${HINTS[hovered.ext] ? ` · ${HINTS[hovered.ext]}` : ""}`
-    : hovered ? `${hovered.label} · ${fileName}` : fileName;
+  const uid = useId().replace(/:/g, "");
+  const caption = hover === -1 ? "Let go in the middle to cancel"
+    : hovered?.ext ? `Convert ${fileName} to ${hovered.label}`
+    : hovered ? `${hovered.label} · ${fileName}` : "Move toward a choice and let go";
+  const centre = hover === -1 ? { text: "Cancel", color: "#d1331f" }
+    : hovered ? { text: hovered.label, color: COLORS[hovered.category] }
+    : { text: fileName.replace(/\.[^.]+$/, ""), color: "var(--sumi-ink-soft)" };
+  const head = { x: Math.sin(ink.angle) * ink.radius, y: -Math.cos(ink.angle) * ink.radius };
+  let dropAlpha = Math.max(0, Math.min(1, (ink.radius - R_IN * 0.75) / 14));
+  if (hover !== null && hover >= 0 && hover < ops.length) {
+    const p = spot(hover, n);
+    dropAlpha *= Math.max(0, Math.min(1, Math.hypot(head.x - p.x, head.y - p.y) / (POOL * 0.9)));
+  }
+  const trail = [...ink.trail, head];
+  const ring = R_IN - 8;
 
   return (
     <div className={embedded ? "wheel is-embedded" : "wheel"}
          style={embedded ? { width: size, height: size }
            : { left: x, top: y, width: px, height: px, "--scale": resize ? 1 : scale } as React.CSSProperties}>
-      <svg viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`} width={px} height={px}>
+      <svg viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`} width={px} height={px} className="sumi">
         <defs>
-          <radialGradient id={`tile-${uid}`} cx="50%" cy="50%" r="60%">
-            <stop offset="0%" stopColor="var(--tile-hi)" /><stop offset="100%" stopColor="var(--tile-lo)" />
+          <radialGradient id={`vignette-${uid}`} r="50%">
+            <stop offset="55%" stopColor="var(--sumi-ink)" stopOpacity="0" /><stop offset="100%" stopColor="var(--sumi-ink)" stopOpacity="0.07" />
           </radialGradient>
-          <linearGradient id={`plate-${uid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--plate-hi)" /><stop offset="100%" stopColor="var(--plate-lo)" />
-          </linearGradient>
+          <radialGradient id={`wash-${uid}`} cx="40%" cy="40%" r="65%">
+            <stop offset="0%" stopColor="var(--sumi-ink)" stopOpacity="var(--sumi-wash)" /><stop offset="100%" stopColor="var(--sumi-ink)" stopOpacity="0.02" />
+          </radialGradient>
         </defs>
-        <circle r={R_OUT + RIM} fill={`url(#plate-${uid})`} className="wheel-plate" />
+        <circle r={R_OUT + RIM} className="sumi-paper" />
+        <circle r={R_OUT + RIM} fill={`url(#vignette-${uid})`} />
         {ops.map((op, i) => {
-          const on = i === hover;
-          const a = (i + 0.5) * step;
-          const lx = Math.sin(a) * R_MID, ly = -Math.cos(a) * R_MID;
+          const p = spot(i, n), seed = i * 2.1 + 0.7, amount = ink.fills[i] ?? 0, color = colors[i];
+          const level = p.y + POOL * 1.3 - POOL * 2.6 * amount;
+          let surface = `M${p.x - POOL * 1.6},${p.y + POOL * 1.4}`;
+          for (let xx = p.x - POOL * 1.6; xx <= p.x + POOL * 1.6; xx += 3) {
+            surface += `L${xx.toFixed(1)},${(level - Math.sin(xx * 0.13 + ink.wave + i) * 2.4 * (1.2 - amount)).toFixed(1)}`;
+          }
+          surface += `L${p.x + POOL * 1.6},${p.y + POOL * 1.4}Z`;
           return (
-            <g key={op.label + i} className={on ? "tile is-on" : "tile"}>
-              <path d={tilePath(i, n, on ? R_OUT + 5 : R_OUT)} fill={on ? accent : `url(#tile-${uid})`}
-                    style={on ? { filter: `drop-shadow(0 6px 14px ${accent}73)` } : undefined} />
-              <text x={lx} y={ly} textAnchor="middle" dominantBaseline="central"
-                    className={op.ext ? "tile-format" : "tile-label"} fill={on ? "#fff" : "var(--fg)"}>{op.label}</text>
+            <g key={op.label + i}>
+              <path d={poolPath(p.x, p.y, POOL, seed)} fill={`url(#wash-${uid})`} />
+              {amount > 0.01 && (
+                <>
+                  <clipPath id={`pool-${uid}-${i}`}><path d={poolPath(p.x, p.y, POOL * 1.05, seed)} /></clipPath>
+                  <path d={surface} fill={color} opacity={0.95} clipPath={`url(#pool-${uid}-${i})`}
+                        style={amount > 0.5 ? { filter: `drop-shadow(0 0 ${10 * amount}px ${color})` } : undefined} />
+                </>
+              )}
             </g>
           );
         })}
-        <rect x={-pillWidth / 2} y={-27} width={pillWidth} height={40} rx={20} className="wheel-pill" />
-        <text y={-7} textAnchor="middle" dominantBaseline="central" className="wheel-pill-text"
-              fill={hover === -1 ? "#ef4444" : hovered ? "var(--fg)" : "var(--muted)"}>{pill}</text>
-        {(Object.keys(MODE_KEYS) as Mode[]).map((m, i) => (
-          <g key={m} transform={`translate(${(i - 1) * 24},${26})`}>
-            <rect x={-10} y={-8} width={20} height={16} rx={5} fill={m === mode ? `${accent}29` : "transparent"} />
-            <text textAnchor="middle" dy="4" className="wheel-key" fill={m === mode ? accent : "var(--muted)"}>{MODE_KEYS[m]}</text>
+        {dropAlpha > 0.01 && (
+          <g style={{ filter: `drop-shadow(0 0 6px ${ink.color})` }} opacity={dropAlpha}>
+            {trail.slice(1).map((pt, k) => (
+              <line key={k} x1={trail[k].x} y1={trail[k].y} x2={pt.x} y2={pt.y} stroke={ink.color} strokeLinecap="round"
+                    strokeWidth={2 + 9 * ((k + 1) / trail.length)} strokeOpacity={0.15 + 0.7 * ((k + 1) / trail.length)} />
+            ))}
+            <path d={poolPath(head.x, head.y, 7.5, ink.wave * 0.6)} fill={ink.color} />
+            <ellipse cx={head.x - 2} cy={head.y - 2.2} rx={1.5} ry={1.2} fill="#fff" opacity={0.6} />
           </g>
-        ))}
+        )}
+        {ops.map((op, i) => {
+          const p = spot(i, n), lit = (ink.fills[i] ?? 0) > 0.55, color = colors[i];
+          const Icon = CATEGORY_ICONS[op.category];
+          const hint = op.ext ? HINTS[op.ext] : undefined;
+          const nameSize = Math.min(op.ext ? 12.5 : 10.5, (POOL * 1.85) / (op.label.length * 0.66));
+          return (
+            <g key={"l" + op.label + i}>
+              <Icon x={p.x - 6} y={p.y - (hint ? 23 : 17)} width={12} height={12} color={lit ? "#fff" : color} strokeWidth={2.2} />
+              <text x={p.x} y={p.y + (hint ? 1 : 4)} textAnchor="middle" dominantBaseline="central" className="sumi-name"
+                    style={{ fontSize: nameSize }} fill={lit ? "#fff" : "var(--sumi-ink)"}>{op.label}</text>
+              {hint && (
+                <text x={p.x} y={p.y + 14} textAnchor="middle" dominantBaseline="central" className="sumi-hint"
+                      fill={lit ? "#fff" : "var(--sumi-ink)"} opacity={0.7}>{hint}</text>
+              )}
+            </g>
+          );
+        })}
+        {Array.from({ length: 160 }, (_, k) => {
+          const t = k / 160, a = Math.PI * 0.62 + Math.PI * 1.85 * t;
+          const w = (1 - t * 0.6) * 4 + wobble(t * 9, 1) * 0.6, rr = ring + wobble(t * 4, 3) * 1.2;
+          return <circle key={k} cx={r2(Math.cos(a) * rr)} cy={r2(-Math.sin(a) * rr)} r={r2(w / 2)} className="sumi-ring" />;
+        })}
+        <File x={-10} y={-26} width={20} height={20} color="var(--sumi-ink-soft)" strokeWidth={1.6} opacity={hover === -1 ? 0.35 : 1} />
+        <text y={7} textAnchor="middle" dominantBaseline="central" className="sumi-centre"
+              style={{ fontSize: hovered || hover === -1 ? 11.5 : 9.5 }} fill={centre.color}>{centre.text}</text>
+        {(Object.keys(MODE_KEYS) as Mode[]).map((m, i) => {
+          const Icon = MODE_ICONS[m], on = m === mode;
+          return <Icon key={m} x={(i - 1) * 18 - (on ? 5 : 4.5)} y={22} width={on ? 10 : 9} height={on ? 10 : 9}
+                       color={on ? MODE_COLORS[m] : "var(--sumi-ink)"} opacity={on ? 1 : 0.25} strokeWidth={2.4} />;
+        })}
       </svg>
       {!embedded && <div className="wheel-caption">{caption}</div>}
     </div>

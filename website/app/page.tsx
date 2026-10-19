@@ -159,9 +159,9 @@ export default async function Home() {
           </div>
           <div className="shot-side">
             <div className="shot">
-              <Image src="/shots/tutorial.png" alt="The hands-on tutorial" width={1120} height={1056} sizes="(max-width: 900px) 100vw, 35vw" />
+              <Image src="/shots/tutorial.png" alt="Kaeru's welcome screen, turning a HEIC photo into JPG in the ink picker" width={1360} height={1056} sizes="(max-width: 900px) 100vw, 35vw" />
             </div>
-            <p className="shot-caption"><b>Learn it in 30 seconds.</b> The first-run tutorial hands you a sample file to try the wheel on, and celebrates when you do.</p>
+            <p className="shot-caption"><b>Learn it in 30 seconds.</b> The first-run tutorial shows the ink picker in action, then hands you a sample file to try it on, and celebrates when you do.</p>
           </div>
         </section>
 

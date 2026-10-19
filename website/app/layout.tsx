@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Zen_Maru_Gothic } from "next/font/google";
+import { Geist, Shippori_Mincho, Zen_Maru_Gothic } from "next/font/google";
 import "./globals.css";
 
 const sans = Geist({ variable: "--font-sans", subsets: ["latin"] });
 // Rounded Japanese face for the かえる wordmark accents.
 const maru = Zen_Maru_Gothic({ variable: "--font-maru", weight: ["700"], subsets: ["latin"] });
+// Japanese serif for the sumi-e picker's labels where Hiragino Mincho isn't installed.
+const mincho = Shippori_Mincho({ variable: "--font-mincho", weight: ["400", "600"], subsets: ["latin"] });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://getkaeru.vercel.app"),
@@ -28,7 +30,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} ${maru.variable}`}>
+    <html lang="en" className={`${sans.variable} ${maru.variable} ${mincho.variable}`}>
       <body>{children}</body>
     </html>
   );

@@ -41,7 +41,7 @@ const HOOK: [string, string][] = [
 
 // Desktop window (1500×860) coordinates. The wheel is drawn larger than on the site so it reads on video.
 const C = { x: 750, y: 450 };
-const WS = 1.35;
+const WS = 1.6;
 const F = { heic: { x: 260, y: 300 }, mov: { x: 260, y: 600 }, doc: { x: 1240, y: 300 } };
 const tile = (i: number, n: number) => {
   const a = (i + 0.5) * (2 * Math.PI) / n;
@@ -220,7 +220,8 @@ export default function Promo() {
               const ops = OPS[b.kind][b.mode];
               return (
                 <div key={b.name} style={{ opacity }}>
-                  <Wheel x={C.x} y={C.y} mode={b.mode} ops={ops} hover={t >= b.hoverAt ? b.hover : null} fileName={b.name} scale={pop * WS} resize />
+                  <Wheel x={C.x} y={C.y} mode={b.mode} ops={ops} hover={t >= b.hoverAt ? b.hover : null} fileName={b.name} scale={pop * WS} resize
+                         travel={prog(t, b.hoverAt, b.hoverAt + 0.6)} />
                   <div className="promo-key" style={{ left: C.x, top: C.y - (R_OUT + RIM) * WS - 70, transform: `translateX(-50%) scale(${back(prog(t, b.wheelIn - 0.08, b.wheelIn + 0.2))})` }}>
                     <kbd>{b.key}</kbd>{b.keyName}
                   </div>

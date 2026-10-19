@@ -8,8 +8,7 @@
   --brand: #22c578;
   --brand-deep: #058561;
   --wheel-glass: #ffffffe6;
-  --plate-hi: #f4f4f4; --plate-lo: #e5e6e5;
-  --tile-hi: #ffffff; --tile-lo: #efefef;
+  --sumi-paper: #f7f2e6; --sumi-ink: #17171a; --sumi-ink-soft: #17171a99; --sumi-wash: .12;
   --shadow: 0 1px 2px #0d1f170d, 0 8px 30px #0d1f1714;
   color-scheme: light;
 }
@@ -23,8 +22,7 @@
     --muted: #94a69c;
     --line: #23322a;
     --wheel-glass: #18211ce8;
-    --plate-hi: #2b2b2d; --plate-lo: #1e1e20;
-    --tile-hi: #3d3d40; --tile-lo: #2c2c2f;
+    --sumi-paper: #1a1817; --sumi-ink: #ede6d6; --sumi-ink-soft: #ede6d699; --sumi-wash: .17;
     --shadow: 0 1px 2px #0006, 0 8px 30px #0008;
     color-scheme: dark;
   }
@@ -176,25 +174,20 @@ h1 { font-size: clamp(40px, 7vw, 76px); line-height: 1.02; letter-spacing: -0.03
   animation: none; padding: 7px 13px;
 }
 @media (max-width: 640px) { .demo-hint.is-replay { left: 50%; transform: translateX(-50%); width: auto; white-space: nowrap; } }
-.wheel svg { overflow: visible; filter: drop-shadow(0 16px 36px #0d1f1733); }
-.wheel-plate { stroke: #0000000f; }
-.tile path { stroke: #00000014; stroke-width: 1; transition: d .12s ease-out; }
-.tile.is-on path { stroke: #ffffff40; }
-.tile-format { font: 700 16px var(--font-sans), sans-serif; letter-spacing: .03em; text-transform: uppercase; }
-.tile-label { font: 600 12px var(--font-sans), sans-serif; }
-.wheel-pill { fill: #fff; filter: drop-shadow(0 3px 10px #0000001f); }
-.wheel-pill-text { font: 600 15px var(--font-sans), sans-serif; }
-@media (prefers-color-scheme: dark) {
-  .wheel-plate { stroke: #ffffff14; }
-  .tile path { stroke: #ffffff12; }
-  .wheel-pill { fill: #38383b; }
-}
+.wheel svg { overflow: visible; filter: drop-shadow(0 16px 36px #0d1f1740); }
+/* Sumi-e: ink pools on a disc of paper, labels in a Japanese serif, like the app. */
+.sumi { --mincho: "Hiragino Mincho ProN", "Yu Mincho", var(--font-mincho), serif; }
+.sumi-paper { fill: var(--sumi-paper); stroke: var(--sumi-ink); stroke-opacity: .12; }
+.sumi-ring { fill: var(--sumi-ink); opacity: .5; }
+.sumi-name { font-family: var(--mincho); font-weight: 600; letter-spacing: .03em; }
+.sumi-hint { font: 400 8px var(--mincho); letter-spacing: .02em; }
+.sumi-centre { font-family: var(--mincho); font-weight: 600; }
 .wheel-caption {
-  position: absolute; left: 50%; top: 100%; transform: translate(-50%, 4px); white-space: nowrap;
-  padding: 6px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 500; color: var(--muted);
-  background: var(--wheel-glass); border: 1px solid var(--line); backdrop-filter: blur(12px);
+  position: absolute; left: 50%; top: 100%; transform: translate(-50%, 2px); white-space: nowrap;
+  padding: 5px 14px; border-radius: 4px; font: 400 12px "Hiragino Mincho ProN", "Yu Mincho", var(--font-mincho), serif;
+  color: var(--sumi-ink); background: var(--sumi-paper); border: 1px solid color-mix(in srgb, var(--sumi-ink) 15%, transparent);
+  box-shadow: 0 4px 14px #0002;
 }
-.wheel-key { font: 700 10px var(--font-sans), sans-serif; }
 
 /* Stats */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 64px 0 24px; text-align: center; }
