@@ -402,8 +402,14 @@ final class WheelView: NSView {
                 label(hint, at: NSPoint(x: p.x, y: nameY - 13), size: 8, color: text.withAlphaComponent(0.7), width: width + 6, bold: false)
             }
         } else {
-            drawSymbol(symbol(for: item), at: NSPoint(x: p.x, y: p.y + 9), color: lit ? .white : color, size: 13)
-            label(item.title, at: NSPoint(x: p.x, y: p.y - 8), size: 10.5, color: text, width: width)
+            // Tool and action names can be two words ("Remove Background"): wrap rather than cut them off.
+            let lines = Self.wrap(item.title, width: width, size: 10.5)
+            let lineHeight: CGFloat = 11.5
+            let top = p.y + (15 + 3 + lineHeight * CGFloat(lines.count)) / 2
+            drawSymbol(symbol(for: item), at: NSPoint(x: p.x, y: top - 7), color: lit ? .white : color, size: 13)
+            for (k, line) in lines.enumerated() {
+                label(line, at: NSPoint(x: p.x, y: top - 18 - lineHeight * (CGFloat(k) + 0.5)), size: 10.5, color: text, width: width)
+            }
         }
     }
 
@@ -499,6 +505,16 @@ final class WheelView: NSView {
         let names = ProcessInfo.processInfo.environment["KAERU_FONT"]?.split(separator: ",").map(String.init) ?? ["HiraMinProN-W6", "HiraMinProN-W3"]
         return NSFont(name: bold ? names[0] : (names.count > 1 ? names[1] : names[0]), size: size)
             ?? .systemFont(ofSize: size, weight: bold ? .semibold : .regular)
+    }
+
+    /// One line if `text` fits at a readable size, otherwise two lines split at the most balanced space.
+    private static func wrap(_ text: String, width: CGFloat, size: CGFloat) -> [String] {
+        func w(_ s: String) -> CGFloat { (s as NSString).size(withAttributes: [.font: mincho(size * 0.9, bold: true), .kern: 0.4]).width }
+        let words = text.split(separator: " ").map(String.init)
+        guard w(text) > width, words.count > 1 else { return [text] }
+        let splits = (1..<words.count).map { (words[..<$0].joined(separator: " "), words[$0...].joined(separator: " ")) }
+        let best = splits.min { max(w($0.0), w($0.1)) < max(w($1.0), w($1.1)) }!
+        return [best.0, best.1]
     }
 
     private func label(_ text: String, at p: NSPoint, size: CGFloat, color: NSColor, width: CGFloat, bold: Bool = true, middle: Bool = false) {
