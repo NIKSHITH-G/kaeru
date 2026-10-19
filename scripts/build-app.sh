@@ -5,6 +5,8 @@
 #   --install         copy to /Applications and launch
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/signing.sh
+setup_signing
 
 swift build -c release --arch arm64
 
@@ -36,7 +38,7 @@ if [[ " $* " == *" --bundle-helpers "* ]]; then
     python3 scripts/bundle_helpers.py "$APP"
 fi
 
-codesign --force --sign - "$APP"
+sign "$APP"
 echo "Built $APP"
 
 if [[ " $* " == *" --install "* ]]; then

@@ -17,8 +17,16 @@ jobs:
           fetch-depth: 0
       - name: Install helpers
         run: brew install ffmpeg webp
-      - name: Build app with bundled helpers
-        run: VERSION="${GITHUB_REF_NAME#v}" scripts/build-app.sh --bundle-helpers
+      - name: Build app with bundled helpers, signed with the Kaeru certificate
+        env:
+          KAERU_SIGNING_P12_B64: ${{ secrets.KAERU_SIGNING_P12 }}
+          KAERU_SIGNING_PASSWORD: ${{ secrets.KAERU_SIGNING_PASSWORD }}
+        run: |
+          echo "$KAERU_SIGNING_P12_B64" | base64 --decode > "$RUNNER_TEMP/kaeru-signing.p12"
+          KAERU_SIGNING_P12_PATH="$RUNNER_TEMP/kaeru-signing.p12" VERSION="${GITHUB_REF_NAME#v}" scripts/build-app.sh --bundle-helpers
+          rm -f "$RUNNER_TEMP/kaeru-signing.p12"
+      - name: Check the release is signed with the stable certificate (keeps permissions across updates)
+        run: codesign -d -r- build/Kaeru.app 2>&1 | grep 'certificate root' 
       - name: Test the release binary
         run: build/Kaeru.app/Contents/MacOS/Kaeru --self-test
       - name: Package DMG

@@ -165,8 +165,9 @@ private struct OnboardingView: View {
                 Label("Ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.headline)
             } else {
                 Button("Allow Keyboard Access…") { KeyboardTap.shared.requestPermission() }.controlSize(.large)
-                Text("macOS will open Privacy & Security — switch on Kaeru under Accessibility.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("In System Settings → Privacy & Security → Accessibility (called “Device Control and Data Access” on newer macOS), switch on Kaeru. If it’s already on, select it, click −, then add it again with +.")
+                    .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 420)
+                Button("Open System Settings") { KeyboardTap.shared.openSystemSettings() }.buttonStyle(.link).font(.caption)
             }
         }
         .padding(30)

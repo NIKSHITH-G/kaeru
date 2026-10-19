@@ -84,7 +84,7 @@ function ConfirmOpen() {
 function AccessibilityList() {
   return (
     <div className="mac-window mac-settings">
-      <div className="mac-titlebar"><span className="lights" />Accessibility</div>
+      <div className="mac-titlebar"><span className="lights" />Accessibility · Device Control and Data Access</div>
       <div className="mac-pane mac-pane-full">
         <span className="mac-pane-dim">Privacy &amp; Security › Accessibility</span>
         <p className="mac-caption">Allow the applications below to control your computer.</p>
@@ -151,7 +151,7 @@ const STEPS: { title: string; body: React.ReactNode; art?: React.ReactNode }[] =
   },
   {
     title: "Turn on keyboard features (recommended)",
-    body: <>In the tutorial, click <b>Allow Keyboard Access…</b> → <b>Open System Settings</b>. macOS opens <b>Privacy &amp; Security → Accessibility</b>: <b>switch on Kaeru</b> and confirm with your password. This enables <b>Return in Finder</b> and the Tab trigger. Kaeru picks it up within two seconds — no restart.</>,
+    body: <>In the tutorial, click <b>Allow Keyboard Access…</b> → <b>Open System Settings</b>. macOS opens <b>Privacy &amp; Security → Accessibility</b> (on newer macOS: <b>Device Control and Data Access</b>): <b>switch on Kaeru</b> and confirm with your password. This enables <b>Return in Finder</b> and the Tab trigger. Kaeru picks it up within two seconds — no restart.</>,
     art: <AccessibilityList />,
   },
   {
@@ -201,8 +201,8 @@ export default function InstallPage() {
           <p>It appears only after you’ve tried to open Kaeru, and disappears after about an hour. Double-click Kaeru in Applications again, click <b>Done</b>, then go straight back to <b>System Settings → Privacy &amp; Security</b> and scroll to the bottom.</p>
         </details>
         <details className="card">
-          <summary>Return in Finder stopped working</summary>
-          <p>Open <b>System Settings → Privacy &amp; Security → Accessibility</b>, switch Kaeru <b>off and on again</b>. If Kaeru isn’t listed, click <b>+</b>, choose Kaeru from Applications, and switch it on.</p>
+          <summary>Kaeru is switched on, but still asks for permission</summary>
+          <p>Open <b>System Settings → Privacy &amp; Security → Accessibility</b> (on newer macOS: <b>Device Control and Data Access</b>). Click <b>Kaeru</b> once to select it, click <b>−</b> to remove it, then click <b>+</b>, choose <b>Applications → Kaeru</b>, and make sure its switch is <b>on</b>. Kaeru notices within two seconds. (Older builds could lose this permission after an update; from 0.9.4 on, updates keep it.)</p>
         </details>
         <details className="card">
           <summary>I don’t see the frog in the menu bar</summary>
@@ -210,7 +210,7 @@ export default function InstallPage() {
         </details>
         <details className="card">
           <summary>Uninstall</summary>
-          <p>Click the 🐸 → <b>Quit Kaeru</b>, drag Kaeru from Applications to the Trash, and remove it from <b>Privacy &amp; Security → Accessibility</b> (select it, click <b>−</b>).</p>
+          <p>Click the 🐸 → <b>Quit Kaeru</b>, drag Kaeru from Applications to the Trash, and remove it from <b>Privacy &amp; Security → Accessibility</b> (on newer macOS: <b>Device Control and Data Access</b>) (select it, click <b>−</b>).</p>
         </details>
         <p className="install-foot">Still stuck? <a href={`${GITHUB_URL}/issues/new`}>Open an issue on GitHub</a> and we’ll help.</p>
       </section>

@@ -86,7 +86,11 @@ def main(app):
             run("install_name_tool", "-change", ref, LIB_REF + name, copy)
 
     for path in [os.path.join(bin_dir, t) for t in os.listdir(bin_dir)] + list(seen.values()):
-        subprocess.run(["codesign", "--force", "--sign", "-", path], check=True, capture_output=True)
+        # Same identity as the app (see scripts/signing.sh); ad hoc when run on its own.
+        identity = os.environ.get("CODESIGN_IDENTITY", "-")
+        keychain = os.environ.get("CODESIGN_KEYCHAIN")
+        args = ["codesign", "--force", "--sign", identity] + (["--keychain", keychain] if keychain else [])
+        subprocess.run(args + [path], check=True, capture_output=True)
 
     size = sum(os.path.getsize(os.path.join(d, f)) for d in (bin_dir, fw_dir) for f in os.listdir(d))
     print(f"Bundled {len(os.listdir(bin_dir))} tools and {len(seen)} libraries ({size / 1e6:.0f} MB)")

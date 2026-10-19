@@ -35,6 +35,12 @@ final class KeyboardTap {
         }
     }
 
+    /// Opens Privacy & Security → Accessibility (named "Device Control and Data Access" on newer macOS).
+    func openSystemSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        start()
+    }
+
     /// Shows the system prompt that sends the user to Privacy & Security → Accessibility.
     func requestPermission() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary

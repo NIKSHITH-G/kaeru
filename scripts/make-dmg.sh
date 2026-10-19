@@ -33,7 +33,8 @@ HOW TO INSTALL AND OPEN KAERU
    Kaeru opens and a frog appears in your menu bar. You only do this once.
 
 6. For "Return in Finder": in the tutorial click "Allow Keyboard Access...", then
-   in System Settings > Privacy & Security > Accessibility, switch Kaeru ON.
+   in System Settings > Privacy & Security > Accessibility (on newer macOS it's called
+   "Device Control and Data Access"), switch Kaeru ON.
 
 macOS 13 or 14: you can instead right-click Kaeru > Open > Open.
 

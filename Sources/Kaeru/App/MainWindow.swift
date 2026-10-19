@@ -367,9 +367,18 @@ private struct SettingsView: View {
                         Text("Accessibility permission")
                         Text("Needed for Return in Finder (renaming and search still get Return) and for ⇥ Tab as a trigger.")
                             .font(.caption).foregroundStyle(.secondary)
+                        if !model.keyboardReady {
+                            Text("In Privacy & Security → Accessibility (“Device Control and Data Access” on newer macOS), switch on Kaeru. Already on? Select Kaeru, click −, then + to add it again.")
+                                .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     Spacer()
-                    if !model.keyboardReady { Button("Grant…") { KeyboardTap.shared.requestPermission() } }
+                    if !model.keyboardReady {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            Button("Open System Settings") { KeyboardTap.shared.openSystemSettings() }
+                            Button("Ask macOS") { KeyboardTap.shared.requestPermission() }.buttonStyle(.link).font(.caption)
+                        }
+                    }
                 }
                 LabeledContent("Open wheel for Finder selection") { KeyCap(text: "⌃⌥M") }
             }
