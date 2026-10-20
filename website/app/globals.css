@@ -221,6 +221,10 @@ h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -0.01em; }
 }
 
 /* Screenshots */
+.shelf-video { max-width: 900px; margin: 0 auto; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #000; }
+.shelf-video video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.shelf-chips { justify-content: center; margin-top: 18px; }
+
 .shots { display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; align-items: start; }
 @media (max-width: 860px) { .shots { grid-template-columns: 1fr; } }
 .shot { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); line-height: 0; }

@@ -80,12 +80,18 @@ The result appears next to the original. A small card shows progress and lets yo
 - **Archives & folders:** list contents, test integrity, folder of images → PDF.
 
 **Actions**
-- AirDrop, Float (a sticky shelf above all windows), Copy, Copy Path, Move To…, open Terminal here, Reveal in Finder.
+- AirDrop, Shelf, Copy, Copy Path, Move To…, open Terminal here, Reveal in Finder.
 
 </td></tr>
 </table>
 
 Every file type has something on every wheel, and the ⌘ wheel is never empty.
+
+### The shelf
+
+Drag any file and **shake the pointer**: a shelf appears right under it. Collect files from different folders, change them all with ✨ (zip them, convert them, compress them), copy them all at once, or drag them straight into a chat or email. Collapse it into a slim tab on the screen edge when you need the space. New screenshots can collect in a shelf too.
+
+https://github.com/NIKSHITH-G/kaeru/raw/main/docs/kaeru-shelf.mp4
 
 <p align="center">
   <img src="docs/images/home.png" width="49%" alt="Kaeru's main window">

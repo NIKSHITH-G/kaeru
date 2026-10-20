@@ -1,0 +1,75 @@
+/* The shelf video's own pieces; the stage, captions and end card come from promo.css. */
+.sv-hook { display: flex; gap: 60px; }
+.sv-mini { width: 300px; border-radius: 18px; background: #ffffffe6; box-shadow: 0 20px 50px #0d1f1726; overflow: hidden; }
+.sv-mini-bar, .sv-finder-bar {
+  display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: #f1f4f2; border-bottom: 1px solid #e1e8e4; font-size: 16px;
+}
+.sv-mini-bar span, .sv-finder-bar span { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+.sv-mini-bar span:nth-child(2), .sv-finder-bar span:nth-child(2) { background: #febc2e; }
+.sv-mini-bar span:nth-child(3), .sv-finder-bar span:nth-child(3) { background: #28c840; }
+.sv-mini-bar b, .sv-finder-bar b { margin-left: 8px; color: #33443b; }
+.sv-mini-body { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 30px 0 26px; font-size: 18px; color: #1d2b24; }
+.sv-mini-body .file-icon { width: 84px; height: 100px; border-radius: 10px; }
+
+.sv-finder { position: absolute; border-radius: 14px; background: #fffffff2; box-shadow: 0 18px 46px #0d1f1726; overflow: hidden; }
+.sv-finder-body { position: relative; height: calc(100% - 40px); }
+.sv-small .file-icon { width: 64px !important; height: 76px !important; border-radius: 8px !important; }
+.sv-small .demo-file-name { font-size: 13px !important; background: transparent !important; }
+
+.sv-shake { position: absolute; z-index: 35; pointer-events: none; }
+.sv-shake span { position: absolute; top: -10px; width: 26px; height: 40px; border: 4px solid #0d1f17aa; border-color: transparent #0d1f17aa transparent transparent; border-radius: 50%; }
+.sv-shake span:first-child { left: -54px; transform: scaleX(-1); }
+.sv-shake span:last-child { left: 34px; }
+
+.sv-shelf {
+  position: absolute; z-index: 20; width: 220px; height: 220px; border-radius: 30px; color: #f3f6f8;
+  background: #1f2730c7; backdrop-filter: blur(20px) saturate(1.4); border: 1px solid #ffffff2e;
+  box-shadow: 0 24px 60px #0d1f1740; transform-origin: 50% 50%;
+}
+.sv-ring { position: absolute; inset: -3px; border-radius: 32px; border: 2px solid #ffffff; pointer-events: none; }
+.sv-handle { position: absolute; top: 7px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: #ffffff59; }
+.sv-btn {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; font-size: 14px;
+  background: #ffffff1f; border: 1px solid #ffffff1f;
+}
+.sv-tl { position: absolute; top: 14px; left: 14px; }
+.sv-tr { position: absolute; top: 14px; right: 14px; font-size: 16px; }
+.sv-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #c9d1d6; font-size: 13px; font-weight: 500; }
+.sv-pile { position: absolute; left: 50%; top: 46%; width: 0; height: 0; }
+.sv-pile-item { position: absolute; left: -38px; top: -46px; transform-origin: 50% 60%; filter: drop-shadow(0 4px 6px #0006); }
+.sv-pile-item .file-icon { width: 76px; height: 92px; border-radius: 9px; }
+.sv-sparkle {
+  position: absolute; right: -8px; bottom: -6px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%;
+  background: #22c578; color: #fff; font-size: 12px;
+}
+.sv-bottom { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.sv-pill {
+  flex: 1; text-align: center; font-size: 13px; padding: 7px 10px; border-radius: 999px; background: #ffffff1f; border: 1px solid #ffffff1f;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.sv-chat {
+  position: absolute; left: 1010px; top: 300px; width: 440px; height: 520px; z-index: 15; border-radius: 18px; overflow: hidden;
+  background: #efe9df; box-shadow: 0 24px 60px #0d1f1733; display: flex; flex-direction: column;
+}
+.sv-chat-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #1f9d6a; color: #fff; }
+.sv-chat-head b { display: block; font-size: 18px; }
+.sv-chat-head small { font-size: 13px; opacity: .85; }
+.sv-avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #ffffff33; font-weight: 700; font-size: 18px; }
+.sv-chat-body { position: relative; flex: 1; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.sv-msg { max-width: 78%; padding: 10px 12px 18px; border-radius: 12px; font-size: 17px; color: #1b2420; position: relative; box-shadow: 0 1px 1px #0001; }
+.sv-msg small { position: absolute; right: 10px; bottom: 4px; font-size: 11px; color: #7c8a84; }
+.sv-in { align-self: flex-start; background: #fff; }
+.sv-out { align-self: flex-end; background: #d6f5e3; transform-origin: 100% 100%; }
+.sv-attach { display: flex; align-items: center; gap: 12px; padding: 4px 6px 4px 2px; }
+.sv-attach .file-icon { width: 50px; height: 60px; border-radius: 7px; }
+.sv-attach b { display: block; font-size: 17px; }
+.sv-attach small { position: static; font-size: 13px; }
+.sv-drop {
+  position: absolute; inset: 12px; border: 3px dashed #1f9d6a; border-radius: 14px; background: #1f9d6a1a;
+  display: grid; place-items: center; font-size: 22px; font-weight: 700; color: #1f7a55;
+}
+.sv-chat-input { padding: 12px 16px; background: #f6f3ee; }
+.sv-chat-input span { display: block; padding: 10px 16px; border-radius: 999px; background: #fff; color: #9aa5a0; font-size: 16px; }
+
+.sv-features { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; max-width: 1300px; margin-top: 70px; }

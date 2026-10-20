@@ -22,7 +22,7 @@ const WHEELS = [
     chips: ["Trim", "Crop", "Compress", "Remove BG", "OCR", "Merge"] },
   { key: "⌃", name: "Actions", color: COLORS.action, mode: "actions" as const, hover: 0,
     body: "Things you do with files: AirDrop them, float them above every window, copy the path, open Terminal there.",
-    chips: ["AirDrop", "Float", "Copy Path", "Move To", "Terminal"] },
+    chips: ["AirDrop", "Shelf", "Copy Path", "Move To", "Terminal"] },
 ];
 
 const FEATURES = [
@@ -136,6 +136,22 @@ export default async function Home() {
                 <p>{w.body}</p>
                 <div className="chips">{w.chips.map((c) => <span key={c} className="chip">{c}</span>)}</div>
               </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="shelf" className="section">
+          <h2>Meet the shelf</h2>
+          <p className="section-lede">
+            Drag a file and shake: a shelf appears under your cursor. Collect files from anywhere, change them all with Kaeru,
+            then drop them where they need to go, or copy them all at once.
+          </p>
+          <div className="shelf-video">
+            <video src="/kaeru-shelf.mp4" poster="/shots/shelf-poster.jpg" controls playsInline preload="none" />
+          </div>
+          <div className="chips shelf-chips">
+            {["Shake to open", "Finder-style previews", "Change with ✨", "Copy all", "Tuck into the screen edge", "Screenshot shelf", "Snap into place"].map((c) => (
+              <span key={c} className="chip">{c}</span>
             ))}
           </div>
         </section>

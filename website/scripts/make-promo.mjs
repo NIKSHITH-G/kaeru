@@ -11,7 +11,8 @@
 //     -c:v libx264 -pix_fmt yuv420p -crf 18 -c:a aac -b:a 192k -shortest public/kaeru-promo.mp4
 import { mkdirSync } from "node:fs";
 
-const FPS = 30, DURATION = 25;
+// DURATION=22 for the shelf video (app/shelf-video); the promo is 25 seconds.
+const FPS = 30, DURATION = Number(process.env.DURATION ?? 25);
 
 export default async function record(page) {
   const out = process.env.FRAMES ?? "/tmp/promo-frames";
