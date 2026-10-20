@@ -17,8 +17,9 @@ final class HUD {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         position(panel)
-        panel.alphaValue = 1
+        if !panel.isVisible { panel.alphaValue = 0 }
         panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.2; panel.animator().alphaValue = 1 }
     }
 
     func scheduleHide() {

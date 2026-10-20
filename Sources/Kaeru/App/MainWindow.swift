@@ -127,21 +127,28 @@ private struct HomeView: View {
 
     private var dropZone: some View {
         VStack(spacing: 10) {
-            Image(systemName: model.dropTargeted ? "arrow.down.circle.fill" : "arrow.down.doc")
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(model.dropTargeted ? Theme.brand.swiftUI : .secondary)
-                .scaleEffect(model.dropTargeted ? 1.12 : 1)
+            ZStack {
+                Circle().fill(Theme.brand.swiftUI.opacity(model.dropTargeted ? 0.22 : 0.1)).frame(width: 64, height: 64)
+                    .scaleEffect(model.dropTargeted ? 1.18 : 1)
+                Image(systemName: model.dropTargeted ? "arrow.down" : "arrow.down.doc.fill")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(Theme.brand.swiftUI)
+                    .offset(y: model.dropTargeted ? 3 : 0)
+            }
             Text(model.dropTargeted ? "Release to choose what to do" : "Drop files here")
                 .font(.system(size: 15, weight: .semibold))
             Button("Choose Files…") { chooseFiles() }.controlSize(.small)
         }
-        .frame(maxWidth: .infinity, minHeight: 150)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(model.dropTargeted ? Theme.brand.swiftUI.opacity(0.1) : Color.secondary.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
-            .foregroundStyle(model.dropTargeted ? Theme.brand.swiftUI : Color.secondary.opacity(0.35)))
-        .animation(.spring(response: 0.3), value: model.dropTargeted)
+        .frame(maxWidth: .infinity, minHeight: 170)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(LinearGradient(colors: [Theme.brand.swiftUI.opacity(model.dropTargeted ? 0.16 : 0.07),
+                                          Theme.Category.action.color.swiftUI.opacity(model.dropTargeted ? 0.1 : 0.03)],
+                                 startPoint: .topLeading, endPoint: .bottomTrailing)))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(style: StrokeStyle(lineWidth: model.dropTargeted ? 2 : 1.5, dash: model.dropTargeted ? [] : [7, 5]))
+            .foregroundStyle(model.dropTargeted ? Theme.brand.swiftUI : Color.secondary.opacity(0.3)))
+        .scaleEffect(model.dropTargeted ? 1.01 : 1)
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: model.dropTargeted)
         .onDrop(of: [.fileURL], isTargeted: $model.dropTargeted) { providers in
             loadURLs(providers) { openWheel($0) }
             return true
@@ -157,7 +164,7 @@ private struct HomeView: View {
     }
 
     private func keyCard(_ mode: WheelMode, _ title: String, _ detail: String, _ color: NSColor) -> some View {
-        Card {
+        Card(lifts: true) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     KeyCap(text: Settings.modifier(for: mode).glyph, large: true)
@@ -178,10 +185,15 @@ private struct HomeView: View {
                 if !center.jobs.isEmpty { Button("See All") { model.page = .history }.buttonStyle(.link) }
             }
             if center.jobs.isEmpty {
-                HStack(spacing: 10) {
-                    KeyCap(text: "↩")
-                    Text("Tip: select files in Finder and press Return to open the wheel.")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                Card {
+                    HStack(spacing: 12) {
+                        KeyCap(text: "↩", large: true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nothing yet").font(.system(size: 13, weight: .semibold))
+                            Text("Tip: select files in Finder and press Return to open the wheel, no dragging needed.")
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
+                        }
+                    }
                 }
             } else {
                 Card {
@@ -333,6 +345,34 @@ private struct FormatsView: View {
 
 // MARK: - Settings
 
+/// Apps where shaking the pointer doesn't open a shelf.
+@MainActor
+private final class IgnoredApps: ObservableObject {
+    @Published private(set) var apps = Settings.shakeIgnoredApps
+
+    static func name(for id: String) -> String {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: id).map { $0.deletingPathExtension().lastPathComponent } ?? id
+    }
+
+    func add() {
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = true
+        panel.prompt = "Ignore"
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            if let id = Bundle(url: url)?.bundleIdentifier, !apps.contains(id) { apps.append(id) }
+        }
+        Settings.shakeIgnoredApps = apps
+    }
+
+    func remove(_ id: String) {
+        apps.removeAll { $0 == id }
+        Settings.shakeIgnoredApps = apps
+    }
+}
+
 private struct SettingsView: View {
     @AppStorage(Settings.outputLocationKey) private var output = OutputLocation.sameFolder.rawValue
     @AppStorage(Settings.dragWheelKey) private var dragWheel = true
@@ -341,6 +381,17 @@ private struct SettingsView: View {
     @AppStorage(Settings.modifierKey(.actions)) private var actionsKey = Settings.defaultTriggers[2].rawValue
     @AppStorage(Settings.returnInFinderKey) private var returnInFinder = true
     @AppStorage(Updater.autoCheckKey) private var autoUpdate = true
+    @AppStorage(Settings.shakeKey) private var shake = true
+    @AppStorage(Settings.shakeStrengthKey) private var shakeStrength = ShakeStrength.normal.rawValue
+    @AppStorage(Settings.closeOnDragOutKey) private var closeOnDragOut = Settings.closeOnDragOut.rawValue
+    @AppStorage(Settings.doubleClickFileKey) private var doubleClickFile = DoubleClickFile.open.rawValue
+    @AppStorage(Settings.doubleClickEdgeKey) private var doubleClickEdge = true
+    @AppStorage(Settings.shelfSnapKey) private var shelfSnap = false
+    @AppStorage(Settings.shelfRetractKey) private var shelfRetract = false
+    @AppStorage(Settings.screenshotShelfKey) private var screenshotShelf = false
+    @AppStorage(Settings.shelfAllSpacesKey) private var shelfAllSpaces = true
+    @AppStorage(Settings.shelfSoundsKey) private var shelfSounds = true
+    @StateObject private var ignored = IgnoredApps()
     @ObservedObject private var model = AppModel.shared
 
     var body: some View {
@@ -357,6 +408,44 @@ private struct SettingsView: View {
                 keyPicker("Convert", $convertKey)
                 keyPicker("Tools", $toolsKey)
                 keyPicker("Actions", $actionsKey)
+            }
+            Section("Shelf") {
+                Toggle("Shake to open a shelf while dragging files", isOn: $shake)
+                if shake {
+                    Picker("Shake strength", selection: $shakeStrength) {
+                        ForEach(ShakeStrength.allCases) { Text($0.label).tag($0.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                    LabeledContent("Ignore shaking in") {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            ForEach(ignored.apps, id: \.self) { id in
+                                HStack(spacing: 6) {
+                                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+                                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().frame(width: 16, height: 16)
+                                    }
+                                    Text(IgnoredApps.name(for: id))
+                                    Button { ignored.remove(id) } label: { Image(systemName: "minus.circle.fill") }
+                                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                                }
+                            }
+                            Button("Add App…") { ignored.add() }
+                        }
+                    }
+                }
+                Picker("Double-click a file", selection: $doubleClickFile) {
+                    ForEach(DoubleClickFile.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                Toggle("Double-click a shelf's edge to tuck it into the screen edge", isOn: $doubleClickEdge)
+                Picker("Close after dragging files out", selection: $closeOnDragOut) {
+                    ForEach(CloseOnDragOut.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                Toggle("Snap into place near screen edges", isOn: $shelfSnap)
+                Toggle("Tuck into the screen edge after the first drop", isOn: $shelfRetract)
+                Toggle("Show new screenshots in a shelf", isOn: $screenshotShelf)
+                    .onChange(of: screenshotShelf) { _ in ScreenshotWatcher.shared.update() }
+                Toggle("Show shelves on every Space", isOn: $shelfAllSpaces)
+                Toggle("Play sounds", isOn: $shelfSounds)
+                LabeledContent("New shelf") { KeyCap(text: "⌃⌥S") }
             }
             Section("Keyboard") {
                 Toggle("Return in Finder opens the wheel", isOn: $returnInFinder)

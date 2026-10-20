@@ -96,7 +96,17 @@ if let command = arguments.first, command.hasPrefix("--") {
                 UpdateCard.show(Updater.Release(version: "0.9.9", notes: "### Movable shelves\n- …",
                                                 dmg: URL(string: "https://example.com")!, page: URL(string: "https://example.com")!))
             case "shelf":
-                ShelfManager.open(with: Array(files.dropFirst()))
+                // KAERU_SHELF=expanded|grid|collapsed picks the shape to draw.
+                let shelfFiles = Array(files.dropFirst()).filter { $0.lastPathComponent != "dark" }
+                ShelfManager.open(with: shelfFiles)
+                if let model = ShelfManager.shelf(containing: shelfFiles) {
+                    switch ProcessInfo.processInfo.environment["KAERU_SHELF"] {
+                    case "expanded": model.shape = .expanded
+                    case "grid": model.shape = .expanded; model.layout = .grid
+                    case "collapsed": model.shape = .collapsed
+                    default: break
+                    }
+                }
             case let t where t.hasPrefix("onboarding"):
                 OnboardingWindow.show()
                 OnboardingModel.shared.step = Int(t.dropFirst(10)) ?? 0

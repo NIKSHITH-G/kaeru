@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpStatusItem()
         dragMonitor.start()
+        ScreenshotWatcher.shared.update()
         KeyboardTap.shared.start()
         hotKey = HotKey(keyCode: kVK_ANSI_M, modifiers: controlKey | optionKey, id: 1) { [weak self] in
             self?.convertFinderSelection()

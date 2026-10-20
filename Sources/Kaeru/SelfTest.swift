@@ -27,8 +27,21 @@ enum SelfTest {
         registry()
         shelf()
         documents()
+        shakes()
         print(failures == 0 ? "✓ \(count) checks passed" : "\(failures) of \(count) checks failed")
         return failures == 0 ? 0 : 1
+    }
+
+    private static func shakes() {
+        func run(_ xs: [CGFloat], dt: TimeInterval) -> Bool {
+            var d = ShakeDetector()
+            return xs.enumerated().contains { i, x in d.feed(NSPoint(x: x, y: 0), minimumSwing: 48, now: Double(i) * dt) }
+        }
+        let wiggle: [CGFloat] = [0, 30, 60, 30, 0, -10, 20, 60, 90, 40, 0, 40, 80]
+        expect(run(wiggle, dt: 0.04), "A quick left-right shake opens a shelf")
+        expect(!run(wiggle, dt: 0.4), "The same moves done slowly don't")
+        expect(!run([0, 20, 40, 60, 80, 100, 120, 140, 160], dt: 0.04), "Dragging in a straight line doesn't")
+        expect(!run([0, 10, 0, 10, 0, 10, 0, 10, 0], dt: 0.04), "Small jitters don't")
     }
 
     @MainActor

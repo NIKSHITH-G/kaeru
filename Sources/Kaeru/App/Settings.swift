@@ -48,6 +48,26 @@ enum ModifierKey: String, CaseIterable, Identifiable {
     }
 }
 
+/// How hard a shake has to be to open a shelf: how far each swing must travel.
+enum ShakeStrength: String, CaseIterable, Identifiable {
+    case gentle, normal, firm
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+    var minimumSwing: CGFloat { [.gentle: 28, .normal: 48, .firm: 80][self]! }
+}
+
+enum CloseOnDragOut: String, CaseIterable, Identifiable {
+    case always, moved, never
+    var id: String { rawValue }
+    var label: String { [.always: "Always", .moved: "Only when files are moved", .never: "Never"][self]! }
+}
+
+enum DoubleClickFile: String, CaseIterable, Identifiable {
+    case open, reveal, quickLook
+    var id: String { rawValue }
+    var label: String { [.open: "Open", .reveal: "Reveal in Finder", .quickLook: "Quick Look"][self]! }
+}
+
 enum Settings {
     private static var defaults: UserDefaults { .standard }
 
@@ -74,6 +94,50 @@ enum Settings {
     static func mode(for flags: NSEvent.ModifierFlags) -> WheelMode? {
         WheelMode.allCases.first { modifier(for: $0).isPressed(flags) }
     }
+
+    // MARK: Shelves
+
+    static let shakeKey = "shelf.shakeToOpen"
+    static let shakeStrengthKey = "shelf.shakeStrength"
+    static let shakeIgnoredAppsKey = "shelf.shakeIgnoredApps"
+    static let shelfAutoCloseKey = "shelf.autoClose"
+    static let shelfAllSpacesKey = "shelf.allSpaces"
+    static let shelfSoundsKey = "shelf.sounds"
+    static let closeOnDragOutKey = "shelf.closeOnDragOut"
+    static let doubleClickFileKey = "shelf.doubleClickFile"
+    static let doubleClickEdgeKey = "shelf.doubleClickEdge"
+    static let shelfSnapKey = "shelf.snap"
+    static let shelfRetractKey = "shelf.retract"
+    static let screenshotShelfKey = "shelf.screenshots"
+    /// Pop, poof and chime sounds as files land on and leave shelves.
+    static var shelfSounds: Bool { defaults.object(forKey: shelfSoundsKey) as? Bool ?? true }
+
+    /// Shaking the pointer while dragging files opens a new shelf under it.
+    static var shakeToOpen: Bool { defaults.object(forKey: shakeKey) as? Bool ?? true }
+    static var shakeStrength: ShakeStrength { ShakeStrength(rawValue: defaults.string(forKey: shakeStrengthKey) ?? "") ?? .normal }
+    /// Bundle identifiers of apps where shaking does nothing.
+    static var shakeIgnoredApps: [String] {
+        get { defaults.stringArray(forKey: shakeIgnoredAppsKey) ?? [] }
+        set { defaults.set(newValue, forKey: shakeIgnoredAppsKey) }
+    }
+    /// When a shelf closes itself after files are dragged out of it (unless pinned).
+    static var closeOnDragOut: CloseOnDragOut {
+        if let raw = defaults.string(forKey: closeOnDragOutKey), let value = CloseOnDragOut(rawValue: raw) { return value }
+        // Carry over the earlier on/off switch.
+        return defaults.object(forKey: shelfAutoCloseKey) as? Bool == false ? .never : .always
+    }
+    static var shelfAutoClose: Bool { closeOnDragOut != .never }
+    static var doubleClickFile: DoubleClickFile { DoubleClickFile(rawValue: defaults.string(forKey: doubleClickFileKey) ?? "") ?? .open }
+    /// Double-clicking an empty part of a shelf tucks it into the screen edge.
+    static var doubleClickEdgeCollapses: Bool { defaults.object(forKey: doubleClickEdgeKey) as? Bool ?? true }
+    /// A shelf let go near a screen edge snaps neatly against it.
+    static var shelfSnap: Bool { defaults.object(forKey: shelfSnapKey) as? Bool ?? false }
+    /// A shelf tucks into the screen edge as soon as the first files land on it.
+    static var shelfRetract: Bool { defaults.object(forKey: shelfRetractKey) as? Bool ?? false }
+    /// New screenshots appear in a shelf.
+    static var screenshotShelf: Bool { defaults.object(forKey: screenshotShelfKey) as? Bool ?? false }
+    /// New shelves follow you to every Space.
+    static var shelfAllSpaces: Bool { defaults.object(forKey: shelfAllSpacesKey) as? Bool ?? true }
 
     static var launchAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }

@@ -94,16 +94,26 @@ struct FormatBadge: View {
 
 /// Wraps content in a rounded card on the window background.
 struct Card<Content: View>: View {
+    var lifts = false
     @ViewBuilder var content: Content
+    @StateObject private var hover = HoverState()
 
     var body: some View {
+        let up = lifts && hover.on
         content
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.background.opacity(0.6)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.separator.opacity(0.6)))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.background.opacity(up ? 0.9 : 0.6)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.separator.opacity(up ? 0.9 : 0.6)))
+            .shadow(color: .black.opacity(up ? 0.12 : 0), radius: up ? 14 : 0, y: up ? 6 : 0)
+            .offset(y: up ? -2 : 0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.8), value: up)
+            .onHover { hover.on = $0 }
     }
 }
+
+/// Hover state kept in an object, since `@State` needs a compiler plugin the Command Line Tools lack.
+final class HoverState: ObservableObject { @Published var on = false }
 
 /// Wraps lines of chips onto new rows as needed.
 struct FlowLayout: Layout {
